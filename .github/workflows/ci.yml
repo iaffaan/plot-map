@@ -1,0 +1,133 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  frontend-ci:
+    name: Frontend CI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+          check-latest: true
+
+      - name: Cache npm
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('frontend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+
+      - name: Install dependencies
+        run: |
+          cd frontend
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Detect available CI steps
+        id: detect
+        run: |
+          cd frontend
+          node <<'NODE'
+          const fs = require('fs');
+          const pkg = require('./package.json');
+          const exists = p => fs.existsSync(p);
+          const lintConfigFiles = ['.eslintrc.js', '.eslintrc.cjs', '.eslintrc.json', '.eslintrc.yaml', '.eslintrc.yml', 'eslint.config.js'];
+          const prettierConfigFiles = ['.prettierrc', '.prettierrc.json', '.prettierrc.yaml', '.prettierrc.yml', 'prettier.config.js', 'prettier.config.cjs'];
+          const eslintConfigExists = lintConfigFiles.some(f => exists(f)) || Boolean(pkg.eslintConfig);
+          const hasLintScript = Boolean(pkg.scripts?.lint);
+          const lintCommand = hasLintScript
+            ? 'npm run lint'
+            : eslintConfigExists
+            ? 'npx eslint .'
+            : '';
+
+          const prettierConfigExists = prettierConfigFiles.some(f => exists(f)) || Boolean(pkg.prettier);
+          const prettierCommand = pkg.scripts?.['format:check']
+            ? 'npm run format:check'
+            : pkg.scripts?.format
+            ? 'npm run format -- --check "**/*.{js,jsx,ts,tsx,json,css,md,html}"'
+            : pkg.scripts?.prettier
+            ? 'npm run prettier -- --check "**/*.{js,jsx,ts,tsx,json,css,md,html}"'
+            : prettierConfigExists
+            ? 'npx prettier --check "**/*.{js,jsx,ts,tsx,json,css,md,html}"'
+            : '';
+
+          const testScript = pkg.scripts?.test;
+          const isDefaultTestScript = typeof testScript === 'string' && ['echo "Error: no test specified" && exit 1', 'echo "No tests specified" && exit 0'].includes(testScript.trim());
+          const hasCustomTestScript = Boolean(testScript) && !isDefaultTestScript;
+          const hasVitest = Boolean(pkg.devDependencies?.vitest || pkg.dependencies?.vitest || exists('vitest.config.js') || exists('vitest.config.ts') || exists('vitest.config.mjs') || exists('vitest.config.cjs'));
+          const hasJest = Boolean(pkg.devDependencies?.jest || pkg.dependencies?.jest || exists('jest.config.js') || exists('jest.config.ts') || exists('jest.config.mjs') || exists('jest.config.cjs'));
+          const testCommand = hasCustomTestScript
+            ? 'npm test'
+            : hasVitest
+            ? 'npx vitest run'
+            : hasJest
+            ? 'npx jest --runInBand'
+            : '';
+
+          const hasTestFiles = require('child_process').spawnSync('bash', ['-lc', 'find . -path "./node_modules" -prune -o -type f \( -name "*.test.*" -o -name "*.spec.*" \) -print | grep -q .'], { stdio: 'ignore' }).status === 0;
+          const finalTestCommand = testCommand || '';
+          const outputs = {
+            lint_command: lintCommand,
+            prettier_command: prettierCommand,
+            test_command: finalTestCommand,
+          };
+          for (const [key, value] of Object.entries(outputs)) {
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${value}\n`);
+          }
+          NODE
+
+      - name: Run lint
+        if: steps.detect.outputs.lint_command != ''
+        run: |
+          cd frontend
+          eval "$LINT_COMMAND"
+        env:
+          LINT_COMMAND: ${{ steps.detect.outputs.lint_command }}
+
+      - name: Run Prettier check
+        if: steps.detect.outputs.prettier_command != ''
+        run: |
+          cd frontend
+          eval "$PRETTIER_COMMAND"
+        env:
+          PRETTIER_COMMAND: ${{ steps.detect.outputs.prettier_command }}
+
+      - name: Run tests
+        if: steps.detect.outputs.test_command != ''
+        run: |
+          cd frontend
+          eval "$TEST_COMMAND"
+        env:
+          TEST_COMMAND: ${{ steps.detect.outputs.test_command }}
+
+      - name: Build production bundle
+        run: |
+          cd frontend
+          npm run build
