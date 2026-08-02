@@ -1,0 +1,12 @@
+# Virtual Environment
+.venv
+venv
+
+__pycache__
+.pytest_cache
+
+# Temp solver files and output SVGs
+backend/tmp/
+*.lp
+*.sol
+*.svg
