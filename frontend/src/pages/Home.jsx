@@ -57,30 +57,19 @@ export default function Home() {
     setCompilationStages(stages)
 
     try {
+      const promptText = `A G+${params.floors - 1} house on a ${params.plotWidth}x${params.plotDepth} ft plot with a front road setback of ${params.setbacks.front || 5.0} ft. Design brief: ${params.description}`
       const payload = {
-        plot: {
-          width: parseFloat(params.plotWidth),
-          depth: parseFloat(params.plotDepth),
-        },
-        setbacks: {
-          left: parseFloat(params.setbacks.left || 0),
-          right: parseFloat(params.setbacks.right || 0),
-          front: parseFloat(params.setbacks.front || 0),
-          back: parseFloat(params.setbacks.back || 0),
-        },
-        floors: parseInt(params.floors || 1),
-        description: params.description,
-        time_limit_sec: 15,
+        prompt: promptText
       }
 
       // Step 1: Let the parser visual execute briefly
       await new Promise((resolve) => setTimeout(resolve, 600))
 
-      // Trigger the real compilation API call
-      const response = await axios.post('http://127.0.0.1:8000/compile', payload)
+      // Trigger the real compilation API call to the AI Parsing Layer
+      const response = await axios.post('http://127.0.0.1:8000/api/compile', payload)
       const data = response.data
 
-      if (!data.success) {
+      if (!data.success && data.status !== 'success') {
         throw new Error(data.error || 'Failed to compile blueprint layout.')
       }
 

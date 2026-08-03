@@ -54,7 +54,7 @@ def compile_blueprint(payload: dict) -> dict:
             }
             
         # Ventilation & Procedural OTS Shaft Generation
-        G_with_ots, ots_shafts = calculate_ventilation_and_ots(G)
+        G_with_ots, ots_shafts = calculate_ventilation_and_ots(G, setbacks)
         
         # Merge OTS shafts into rooms list for packing
         all_rooms_to_pack = list(rooms)
@@ -62,6 +62,17 @@ def compile_blueprint(payload: dict) -> dict:
             all_rooms_to_pack.append(ots)
             
         # --- 4. Optimization Layer (Solver) ---
+        print("\n=== DEBUG SOLVE LAYOUT INPUTS ===")
+        print(f"width: {width}, depth: {depth}")
+        print(f"setbacks: {setbacks}")
+        print(f"core_bounds: {core_bounds}")
+        print(f"grid_snap: {grid_snap}, time_limit_sec: {time_limit_sec}")
+        print("rooms:")
+        for r in all_rooms_to_pack:
+            print(f"  - {r.get('name')}: min_area={r.get('min_area')}, min_w={r.get('min_width')}, min_h={r.get('min_height')}, road={r.get('adjacent_to_road')}, vent={r.get('requires_ventilation')}")
+        print(f"adjacencies: {adjacencies}")
+        print("==================================\n")
+        
         solver_res = solve_layout(
             plot_width=width,
             plot_depth=depth,

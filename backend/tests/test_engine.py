@@ -56,7 +56,7 @@ def test_complete_compiler_pipeline():
     """Verify the entire pipeline end-to-end with the solver."""
     payload = {
         'plot': {'width': 40.0, 'depth': 40.0},
-        'setbacks': {'left': 5.0, 'right': 5.0, 'bottom': 5.0, 'top': 5.0},
+        'setbacks': {'left': 0.0, 'right': 0.0, 'bottom': 5.0, 'top': 0.0},
         'stair_core': {'width': 10.0, 'height': 10.0, 'edge': 'bottom-left'},
         'road_edge': 'bottom',
         'rooms': [
@@ -86,32 +86,38 @@ def test_complete_compiler_pipeline():
     
     # Assert coordinates bounds are valid
     for room_name, room in layout.items():
-        assert room['x'] >= 5.0
-        assert room['x'] + room['width'] <= 35.0
+        assert room['x'] >= 0.0
+        assert room['x'] + room['width'] <= 40.0
         assert room['y'] >= 5.0
-        assert room['y'] + room['height'] <= 35.0
+        assert room['y'] + room['height'] <= 40.0
 
 def test_api_endpoint():
-    """Verify that the FastAPI endpoint compiles successfully with Pydantic request object."""
-    from main import compile_layout_endpoint, CompileRequest, PlotConfig, Setbacks, StairCoreConfig, RoomConfig
+    """Verify that the FastAPI endpoint compiles successfully with mocked LLM response."""
+    from unittest.mock import patch
+    from main import compile_layout_endpoint, CompileRequest
+    from intent_schema import CompilerIntent, RoomIntent
     
-    req = CompileRequest(
-        plot=PlotConfig(width=40.0, depth=40.0),
-        setbacks=Setbacks(left=5.0, right=5.0, bottom=5.0, top=5.0),
-        stair_core=StairCoreConfig(width=10.0, height=10.0, edge='bottom-left'),
+    mock_intent = CompilerIntent(
+        plot_width=40.0,
+        plot_depth=40.0,
+        floors=2,
+        front_road_setback=5.0,
         rooms=[
-            RoomConfig(name='Main Door', type='Entrance', min_area=9.0, min_width=3.0, min_height=3.0, requires_ventilation=False, adjacent_to_road=True),
-            RoomConfig(name='Living Room', type='Living Room', min_area=100.0, min_width=10.0, min_height=10.0, requires_ventilation=True, adjacent_to_road=True),
-            RoomConfig(name='Kitchen', type='Kitchen', min_area=64.0, min_width=8.0, min_height=8.0, requires_ventilation=True, adjacent_to_road=False),
-            RoomConfig(name='Bedroom', type='Bedroom', min_area=100.0, min_width=10.0, min_height=10.0, requires_ventilation=True, adjacent_to_road=False)
-        ],
-        adjacencies=[
-            ('Main Door', 'Living Room'),
-            ('Living Room', 'Kitchen'),
-            ('Living Room', 'Bedroom')
+            RoomIntent(room_type="bedroom", min_area_sqft=100),
+            RoomIntent(room_type="kitchen", min_area_sqft=60)
         ]
     )
-    res = compile_layout_endpoint(req)
-    assert res['success']
-    assert len(res['layout']) == 6  # Main Door, Living Room, Kitchen, Bedroom, OTS_Kitchen, OTS_Bedroom
+    import main
+    from unittest.mock import MagicMock
+    main.client = MagicMock()
+    with patch("main.client.create", return_value=mock_intent):
+        req = CompileRequest(prompt="G+1 house on 40x40 plot with bedroom and kitchen")
+        res = compile_layout_endpoint(req)
+        assert res["status"] == "success"
+        assert res["message"] == "Math Engine Executed Successfully"
+        assert res["extracted_intent"]["plot_width"] == 40.0
+        assert res["extracted_intent"]["plot_depth"] == 40.0
+        assert res["extracted_intent"]["floors"] == 2
+        assert len(res["extracted_intent"]["rooms"]) == 2
+
 

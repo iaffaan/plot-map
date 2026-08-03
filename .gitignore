@@ -11,5 +11,7 @@ backend/tmp/
 *.sol
 *.svg
 
+# Environment variable
+.env 
 
 node_modules/

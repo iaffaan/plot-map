@@ -151,6 +151,7 @@ def solve_layout(
                 prob += x_prime_vars[name] == x_env_max, f"road_right_{name}"
                 
     # Room-to-Room Non-Overlap Constraints
+    overlap_vars_dict = {}
     room_names = [room['name'] for room in rooms]
     for i in range(len(room_names)):
         for j in range(i + 1, len(room_names)):
@@ -158,7 +159,7 @@ def solve_layout(
             rj = room_names[j]
             
             # Non-overlap binary variables
-            overlap_bin = [pulp.LpVariable(f"b_overlap_{ri}_{rj}_{k}", cat=pulp.LpBinary) for k in range(4)]
+            overlap_bin = [pulp.LpVariable(f"b_overlap_{ri.replace(' ', '_')}_{rj.replace(' ', '_')}_{k}", cat=pulp.LpBinary) for k in range(4)]
             
             # Constraints:
             # 1. ri is to the left of rj
@@ -173,42 +174,65 @@ def solve_layout(
             # Enforce at least one non-overlapping boundary condition
             prob += sum(overlap_bin) >= 1, f"overlap_sum_{ri}_{rj}"
             
-    # General touch helper function to enforce wall-sharing between two rooms
-    def add_touch_constraint(r1: str, r2: str, D_touch: int, prefix: str):
+            # Store for reuse in touch constraints
+            key = tuple(sorted([ri, rj]))
+            overlap_vars_dict[key] = (overlap_bin, ri, rj)
+            
+    # Optimized touch helper function that reuses existing non-overlap binary variables
+    def add_optimized_touch_constraint(r1: str, r2: str, D_touch: int, prefix: str):
         nonlocal prob
-        # We need a 4-variable binary array to determine which side they touch on:
-        # t_bin[0]: r1 is immediately to the left of r2 (r1.x_prime == r2.x)
-        # t_bin[1]: r1 is immediately to the right of r2 (r1.x == r2.x_prime)
-        # t_bin[2]: r1 is immediately below r2 (r1.y_prime == r2.y)
-        # t_bin[3]: r1 is immediately above r2 (r1.y == r2.y_prime)
-        t_bin = [pulp.LpVariable(f"t_{prefix}_{k}", cat=pulp.LpBinary) for k in range(4)]
+        key = tuple(sorted([r1, r2]))
+        if key not in overlap_vars_dict:
+            return
         
-        # Side 1: r1 is immediately to the left of r2
-        prob += x_prime_vars[r1] - x_vars[r2] >= -M * (1 - t_bin[0]), f"{prefix}_left_1"
-        prob += x_prime_vars[r1] - x_vars[r2] <= M * (1 - t_bin[0]), f"{prefix}_left_2"
-        prob += y_prime_vars[r1] - y_vars[r2] >= D_touch - M * (1 - t_bin[0]), f"{prefix}_left_3"
-        prob += y_prime_vars[r2] - y_vars[r1] >= D_touch - M * (1 - t_bin[0]), f"{prefix}_left_4"
+        overlap_bin, u, v = overlap_vars_dict[key]
+        is_r1_u = (r1 == u)
         
-        # Side 2: r1 is immediately to the right of r2
-        prob += x_vars[r1] - x_prime_vars[r2] >= -M * (1 - t_bin[1]), f"{prefix}_right_1"
-        prob += x_vars[r1] - x_prime_vars[r2] <= M * (1 - t_bin[1]), f"{prefix}_right_2"
-        prob += y_prime_vars[r1] - y_vars[r2] >= D_touch - M * (1 - t_bin[1]), f"{prefix}_right_3"
-        prob += y_prime_vars[r2] - y_vars[r1] >= D_touch - M * (1 - t_bin[1]), f"{prefix}_right_4"
+        # Side 0: u is to the left of v (u.x_prime <= v.x) -> if active, force equality & overlap in y
+        # Side 1: u is to the right of v (u.x >= v.x_prime) -> if active, force equality & overlap in y
+        # Side 2: u is below v (u.y_prime <= v.y) -> if active, force equality & overlap in x
+        # Side 3: u is above v (u.y >= v.y_prime) -> if active, force equality & overlap in x
         
-        # Side 3: r1 is immediately below r2
-        prob += y_prime_vars[r1] - y_vars[r2] >= -M * (1 - t_bin[2]), f"{prefix}_below_1"
-        prob += y_prime_vars[r1] - y_vars[r2] <= M * (1 - t_bin[2]), f"{prefix}_below_2"
-        prob += x_prime_vars[r1] - x_vars[r2] >= D_touch - M * (1 - t_bin[2]), f"{prefix}_below_3"
-        prob += x_prime_vars[r2] - x_vars[r1] >= D_touch - M * (1 - t_bin[2]), f"{prefix}_below_4"
-        
-        # Side 4: r1 is immediately above r2
-        prob += y_vars[r1] - y_prime_vars[r2] >= -M * (1 - t_bin[3]), f"{prefix}_above_1"
-        prob += y_vars[r1] - y_prime_vars[r2] <= M * (1 - t_bin[3]), f"{prefix}_above_2"
-        prob += x_prime_vars[r1] - x_vars[r2] >= D_touch - M * (1 - t_bin[3]), f"{prefix}_above_3"
-        prob += x_prime_vars[r2] - x_vars[r1] >= D_touch - M * (1 - t_bin[3]), f"{prefix}_above_4"
-        
-        # Must touch on at least one side
-        prob += sum(t_bin) >= 1, f"{prefix}_sum"
+        if is_r1_u:
+            # Side 0: u (r1) is immediately to the left of v (r2)
+            prob += x_prime_vars[r1] >= x_vars[r2] - M * (1 - overlap_bin[0]), f"{prefix}_opt_left_1"
+            prob += y_prime_vars[r1] - y_vars[r2] >= D_touch - M * (1 - overlap_bin[0]), f"{prefix}_opt_left_2"
+            prob += y_prime_vars[r2] - y_vars[r1] >= D_touch - M * (1 - overlap_bin[0]), f"{prefix}_opt_left_3"
+            
+            # Side 1: u (r1) is immediately to the right of v (r2)
+            prob += x_vars[r1] <= x_prime_vars[r2] + M * (1 - overlap_bin[1]), f"{prefix}_opt_right_1"
+            prob += y_prime_vars[r1] - y_vars[r2] >= D_touch - M * (1 - overlap_bin[1]), f"{prefix}_opt_right_2"
+            prob += y_prime_vars[r2] - y_vars[r1] >= D_touch - M * (1 - overlap_bin[1]), f"{prefix}_opt_right_3"
+            
+            # Side 2: u (r1) is immediately below v (r2)
+            prob += y_prime_vars[r1] >= y_vars[r2] - M * (1 - overlap_bin[2]), f"{prefix}_opt_below_1"
+            prob += x_prime_vars[r1] - x_vars[r2] >= D_touch - M * (1 - overlap_bin[2]), f"{prefix}_opt_below_2"
+            prob += x_prime_vars[r2] - x_vars[r1] >= D_touch - M * (1 - overlap_bin[2]), f"{prefix}_opt_below_3"
+            
+            # Side 3: u (r1) is immediately above v (r2)
+            prob += y_vars[r1] <= y_prime_vars[r2] + M * (1 - overlap_bin[3]), f"{prefix}_opt_above_1"
+            prob += x_prime_vars[r1] - x_vars[r2] >= D_touch - M * (1 - overlap_bin[3]), f"{prefix}_opt_above_2"
+            prob += x_prime_vars[r2] - x_vars[r1] >= D_touch - M * (1 - overlap_bin[3]), f"{prefix}_opt_above_3"
+        else:
+            # Side 0: v (r1) is to the left of u (r2) -> u (r2) is to the right of v (r1) -> overlap_bin[1]
+            prob += x_prime_vars[r1] >= x_vars[r2] - M * (1 - overlap_bin[1]), f"{prefix}_opt_left_1_rev"
+            prob += y_prime_vars[r1] - y_vars[r2] >= D_touch - M * (1 - overlap_bin[1]), f"{prefix}_opt_left_2_rev"
+            prob += y_prime_vars[r2] - y_vars[r1] >= D_touch - M * (1 - overlap_bin[1]), f"{prefix}_opt_left_3_rev"
+            
+            # Side 1: v (r1) is to the right of u (r2) -> u (r2) is to the left of v (r1) -> overlap_bin[0]
+            prob += x_vars[r1] <= x_prime_vars[r2] + M * (1 - overlap_bin[0]), f"{prefix}_opt_right_1_rev"
+            prob += y_prime_vars[r1] - y_vars[r2] >= D_touch - M * (1 - overlap_bin[0]), f"{prefix}_opt_right_2_rev"
+            prob += y_prime_vars[r2] - y_vars[r1] >= D_touch - M * (1 - overlap_bin[0]), f"{prefix}_opt_right_3_rev"
+            
+            # Side 2: v (r1) is below u (r2) -> u (r2) is above v (r1) -> overlap_bin[3]
+            prob += y_prime_vars[r1] >= y_vars[r2] - M * (1 - overlap_bin[3]), f"{prefix}_opt_below_1_rev"
+            prob += x_prime_vars[r1] - x_vars[r2] >= D_touch - M * (1 - overlap_bin[3]), f"{prefix}_opt_below_2_rev"
+            prob += x_prime_vars[r2] - x_vars[r1] >= D_touch - M * (1 - overlap_bin[3]), f"{prefix}_opt_below_3_rev"
+            
+            # Side 3: v (r1) is above u (r2) -> u (r2) is below v (r1) -> overlap_bin[2]
+            prob += y_vars[r1] <= y_prime_vars[r2] + M * (1 - overlap_bin[2]), f"{prefix}_opt_above_1_rev"
+            prob += x_prime_vars[r1] - x_vars[r2] >= D_touch - M * (1 - overlap_bin[2]), f"{prefix}_opt_above_2_rev"
+            prob += x_prime_vars[r2] - x_vars[r1] >= D_touch - M * (1 - overlap_bin[2]), f"{prefix}_opt_above_3_rev"
 
     # Enforce OTS ventilation touch constraints (minimum 2 ft shared wall)
     D_ots_touch_int = max(1, int(round(2.0 * S)))
@@ -216,7 +240,7 @@ def solve_layout(
         name = room['name']
         ventilates_target = room.get('ventilates', None)
         if ventilates_target and ventilates_target in x_vars:
-            add_touch_constraint(name, ventilates_target, D_ots_touch_int, f"ots_touch_{name}_{ventilates_target}")
+            add_optimized_touch_constraint(name, ventilates_target, D_ots_touch_int, f"ots_touch_{name.replace(' ', '_')}_{ventilates_target.replace(' ', '_')}")
             
     # Enforce door adjacency touch constraints (minimum 3 ft shared wall for access doorways)
     if adjacencies:
@@ -226,7 +250,7 @@ def solve_layout(
             if r1 in x_vars and r2 in x_vars:
                 r1_clean = r1.replace(" ", "_")
                 r2_clean = r2.replace(" ", "_")
-                add_touch_constraint(r1, r2, D_door_touch_int, f"adj_touch_{idx}_{r1_clean}_{r2_clean}")
+                add_optimized_touch_constraint(r1, r2, D_door_touch_int, f"adj_touch_{idx}_{r1_clean}_{r2_clean}")
             
     # Objective Function: Maximize the total perimeter/area sum of the rooms
     # Since area is non-linear, we maximize a weighted sum of width and height variables
