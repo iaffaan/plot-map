@@ -1,6 +1,8 @@
-import pulp
 import math
 import os
+
+import pulp
+
 
 def solve_layout(
     plot_width: float,
@@ -8,10 +10,11 @@ def solve_layout(
     setbacks: dict,
     stair_core_coords: tuple[float, float, float, float],  # (min_x, min_y, max_x, max_y)
     rooms: list[dict],
-    adjacencies: list[tuple[str, str]] = None,
+    adjacencies: list[tuple[str, str]] | None = None,
     road_edge: str = 'bottom',
     grid_snap: float = 0.5,
-    time_limit_sec: int = 5
+    time_limit_sec: int = 8,
+    plumbing_cores: list[tuple[float, float, float, float]] | None = None
 ) -> dict:
     """
     Solves the room layout packing problem using Mixed-Integer Linear Programming (MILP).
@@ -33,19 +36,19 @@ def solve_layout(
     S = 1.0 / grid_snap
     
     # Scale dimensions to integers
-    pw_int = int(round(plot_width * S))
-    pd_int = int(round(plot_depth * S))
+    pw_int = round(plot_width * S)
+    pd_int = round(plot_depth * S)
     
-    x_env_min = int(round(setbacks.get('left', 0.0) * S))
-    x_env_max = pw_int - int(round(setbacks.get('right', 0.0) * S))
-    y_env_min = int(round(setbacks.get('bottom', 0.0) * S))
-    y_env_max = pd_int - int(round(setbacks.get('top', 0.0) * S))
+    x_env_min = round(setbacks.get('left', 0.0) * S)
+    x_env_max = pw_int - round(setbacks.get('right', 0.0) * S)
+    y_env_min = round(setbacks.get('bottom', 0.0) * S)
+    y_env_max = pd_int - round(setbacks.get('top', 0.0) * S)
     
     sc_x_min, sc_y_min, sc_x_max, sc_y_max = stair_core_coords
-    sc_x_min_int = int(round(sc_x_min * S))
-    sc_y_min_int = int(round(sc_y_min * S))
-    sc_x_max_int = int(round(sc_x_max * S))
-    sc_y_max_int = int(round(sc_y_max * S))
+    sc_x_min_int = round(sc_x_min * S)
+    sc_y_min_int = round(sc_y_min * S)
+    sc_x_max_int = round(sc_x_max * S)
+    sc_y_max_int = round(sc_y_max * S)
     
     # Big-M value: Maximum coordinate dimension
     M = max(pw_int, pd_int)
@@ -68,8 +71,8 @@ def solve_layout(
         name = room['name']
         
         # Determine room bounds in grid units
-        min_w_int = int(round(room.get('min_width', 3.0) * S))
-        min_h_int = int(round(room.get('min_height', 3.0) * S))
+        min_w_int = round(room.get('min_width', 3.0) * S)
+        min_h_int = round(room.get('min_height', 3.0) * S)
         
         # Continuous-like integer variables
         x_vars[name] = pulp.LpVariable(f"x_{name}", lowBound=x_env_min, upBound=x_env_max, cat=pulp.LpInteger)
@@ -106,7 +109,7 @@ def solve_layout(
         
         # Aspect Ratio Constraints
         # Aspect ratio bounds (default 1.0 to 1.6)
-        ar_min, ar_max = room.get('aspect_ratio_range', (1.0, 1.6))
+        _ar_min, ar_max = room.get('aspect_ratio_range', (1.0, 1.6))
         
         # o_i = 1: Horizontal (w >= h, w <= ar_max * h)
         # o_i = 0: Vertical (h >= w, h <= ar_max * w)
@@ -127,7 +130,7 @@ def solve_layout(
         
         if w_end > w_start:
             points = [w_start + i * (w_end - w_start) // 4 for i in range(5)]
-            points = sorted(list(set(points)))  # Remove duplicates
+            points = sorted(set(points))  # Remove duplicates
         else:
             points = [w_start]
             
@@ -185,13 +188,8 @@ def solve_layout(
         if key not in overlap_vars_dict:
             return
         
-        overlap_bin, u, v = overlap_vars_dict[key]
+        overlap_bin, u, _v = overlap_vars_dict[key]
         is_r1_u = (r1 == u)
-        
-        # Side 0: u is to the left of v (u.x_prime <= v.x) -> if active, force equality & overlap in y
-        # Side 1: u is to the right of v (u.x >= v.x_prime) -> if active, force equality & overlap in y
-        # Side 2: u is below v (u.y_prime <= v.y) -> if active, force equality & overlap in x
-        # Side 3: u is above v (u.y >= v.y_prime) -> if active, force equality & overlap in x
         
         if is_r1_u:
             # Side 0: u (r1) is immediately to the left of v (r2)
@@ -235,7 +233,7 @@ def solve_layout(
             prob += x_prime_vars[r2] - x_vars[r1] >= D_touch - M * (1 - overlap_bin[2]), f"{prefix}_opt_above_3_rev"
 
     # Enforce OTS ventilation touch constraints (minimum 2 ft shared wall)
-    D_ots_touch_int = max(1, int(round(2.0 * S)))
+    D_ots_touch_int = max(1, round(2.0 * S))
     for room in rooms:
         name = room['name']
         ventilates_target = room.get('ventilates', None)
@@ -244,7 +242,7 @@ def solve_layout(
             
     # Enforce door adjacency touch constraints (minimum 3 ft shared wall for access doorways)
     if adjacencies:
-        D_door_touch_int = max(1, int(round(3.0 * S)))
+        D_door_touch_int = max(1, round(3.0 * S))
         for idx, (r1, r2) in enumerate(adjacencies):
             # Only apply if both rooms are active/packed
             if r1 in x_vars and r2 in x_vars:
@@ -252,23 +250,111 @@ def solve_layout(
                 r2_clean = r2.replace(" ", "_")
                 add_optimized_touch_constraint(r1, r2, D_door_touch_int, f"adj_touch_{idx}_{r1_clean}_{r2_clean}")
             
-    # Objective Function: Maximize the total perimeter/area sum of the rooms
-    # Since area is non-linear, we maximize a weighted sum of width and height variables
-    # to encourage rooms to expand and pack the envelope efficiently, reducing dead space.
-    # We can also add a small penalty to keep coordinates compact.
-    prob += sum(w_vars[name] + h_vars[name] for name in room_names), "Maximize_Room_Sizes"
+    # --- Phase 4 Soft Constraints & Objective Function Configuration ---
     
-    # Solve with time limit and optimization tolerances
-    solver = pulp.PULP_CBC_CMD(msg=False, timeLimit=time_limit_sec, gapRel=0.10)
+    # Helper to calculate Manhattan distance between two rooms (bottom-left to bottom-left)
+    def add_distance_vars(r1: str, r2: str, prefix: str):
+        nonlocal prob
+        if r1 not in x_vars or r2 not in x_vars:
+            return None
+        dx = pulp.LpVariable(f"dx_{prefix}", lowBound=0, cat=pulp.LpInteger)
+        dy = pulp.LpVariable(f"dy_{prefix}", lowBound=0, cat=pulp.LpInteger)
+        
+        prob += dx >= x_vars[r1] - x_vars[r2]
+        prob += dx >= x_vars[r2] - x_vars[r1]
+        prob += dy >= y_vars[r1] - y_vars[r2]
+        prob += dy >= y_vars[r2] - y_vars[r1]
+        
+        return dx + dy
+
+    # 1. Base Reward: Maximize sizes of all rooms
+    obj = sum(w_vars[name] + h_vars[name] for name in room_names)
     
-    # Configure custom temporary directory to handle spaces in Windows user profiles
+    # 2. Daylight & Ventilation: Reward rooms touching outer envelope boundaries
+    vent_rooms = [r['name'] for r in rooms if r.get('requires_ventilation', False)]
+    vent_rewards = []
+    for name in vent_rooms:
+        b_left = pulp.LpVariable(f"b_left_{name.replace(' ', '_')}", cat=pulp.LpBinary)
+        b_right = pulp.LpVariable(f"b_right_{name.replace(' ', '_')}", cat=pulp.LpBinary)
+        b_top = pulp.LpVariable(f"b_top_{name.replace(' ', '_')}", cat=pulp.LpBinary)
+        b_bottom = pulp.LpVariable(f"b_bottom_{name.replace(' ', '_')}", cat=pulp.LpBinary)
+        
+        prob += x_vars[name] <= x_env_min + M * (1 - b_left)
+        prob += x_prime_vars[name] >= x_env_max - M * (1 - b_right)
+        prob += y_vars[name] <= y_env_min + M * (1 - b_bottom)
+        prob += y_prime_vars[name] >= y_env_max - M * (1 - b_top)
+        
+        vent_rewards.append(b_left + b_right + b_top + b_bottom)
+        
+    if vent_rewards:
+        obj += 10 * sum(vent_rewards)
+        
+    # 3. Compact Circulation: Keep Kitchen near Living Room
+    kitchen_name = next((r['name'] for r in rooms if r['type'] == 'Kitchen'), None)
+    living_name = next((r['name'] for r in rooms if r['type'] == 'Living Room'), None)
+    if kitchen_name and living_name:
+        dist_kl = add_distance_vars(kitchen_name, living_name, "kit_liv")
+        if dist_kl is not None:
+            obj -= 2 * dist_kl
+            
+    # 4. Plumbing Alignment: Keep Bathrooms close to each other
+    bath_names = [r['name'] for r in rooms if r['type'] == 'Bathroom']
+    if len(bath_names) >= 2:
+        for idx in range(len(bath_names) - 1):
+            dist_bb = add_distance_vars(bath_names[idx], bath_names[idx+1], f"bath_{idx}")
+            if dist_bb is not None:
+                obj -= 2 * dist_bb
+                
+    # 5. Bedroom Privacy: Keep Bedrooms away from the Entrance (Road Edge)
+    bedroom_names = [r['name'] for r in rooms if r['type'] == 'Bedroom']
+    if bedroom_names:
+        for bed_name in bedroom_names:
+            if road_edge == 'bottom':
+                obj += 2 * y_vars[bed_name]
+            elif road_edge == 'top':
+                obj -= 2 * y_vars[bed_name]
+            elif road_edge == 'left':
+                obj += 2 * x_vars[bed_name]
+            elif road_edge == 'right':
+                obj -= 2 * x_vars[bed_name]
+                
+    # 6. Multi-Floor Plumbing Alignment: Align bathrooms with lower floor plumbing cores
+    if plumbing_cores:
+        bath_rooms = [r['name'] for r in rooms if r['type'] == 'Bathroom']
+        for i, bath_name in enumerate(bath_rooms):
+            for j, pc in enumerate(plumbing_cores):
+                pc_xmin, pc_ymin, pc_xmax, pc_ymax = pc
+                pc_cx = (pc_xmin + pc_xmax) / 2.0
+                pc_cy = (pc_ymin + pc_ymax) / 2.0
+                
+                pc_cx_int = round(pc_cx * S)
+                pc_cy_int = round(pc_cy * S)
+                
+                # Distance variables
+                dx = pulp.LpVariable(f"dx_pc_{i}_{j}", lowBound=0, cat=pulp.LpContinuous)
+                dy = pulp.LpVariable(f"dy_pc_{i}_{j}", lowBound=0, cat=pulp.LpContinuous)
+                
+                prob += dx >= (x_vars[bath_name] + w_vars[bath_name] / 2.0) - pc_cx_int
+                prob += dx >= pc_cx_int - (x_vars[bath_name] + w_vars[bath_name] / 2.0)
+                prob += dy >= (y_vars[bath_name] + h_vars[bath_name] / 2.0) - pc_cy_int
+                prob += dy >= pc_cy_int - (y_vars[bath_name] + h_vars[bath_name] / 2.0)
+                
+                # Subtract from objective to reward overlap/proximity
+                obj -= 5.0 * (dx + dy)
+
+    # Register objective function
+    prob += obj, "Maximize_Aesthetic_Layout"
+    
+    # Solve with time limit and optimization tolerances (gap tolerance: 2%)
+    solver = pulp.PULP_CBC_CMD(msg=False, timeLimit=time_limit_sec, gapRel=0.02)
+    
+    # Configure custom temporary directory
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    tmp_dir = os.path.abspath(os.path.join(current_dir, "..", "tmp"))
+    tmp_dir = os.path.abspath(os.path.join(current_dir, "..", "..", "..", "tmp"))
     os.makedirs(tmp_dir, exist_ok=True)
     solver.tmpDir = tmp_dir
     
     status = prob.solve(solver)
-    
     status_str = pulp.LpStatus[status]
     
     if status_str != "Optimal" and status_str != "Feasible":

@@ -1,0 +1,27 @@
+from pydantic import AliasChoices, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    PROJECT_NAME: str = "Uncharted Plot-Map Backend"
+    VERSION: str = "1.0.0"
+    API_V1_STR: str = "/api/v1"
+    
+    # API Keys
+    GEMINI_API_KEY: str | None = Field(default=None, validation_alias=AliasChoices("GEMINI_API_KEY", "GOOGLE_API_KEY"))
+    
+    # Application Config
+    ENVIRONMENT: str = "development"
+    BACKEND_CORS_ORIGINS: list[str] = ["*"]
+    
+    # Solver Config
+    SOLVER_TIMEOUT_SEC: int = 8
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore"
+    )
+
+# Instantiate settings
+settings = Settings()

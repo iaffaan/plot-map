@@ -1,6 +1,7 @@
 from enum import Enum
+
 from pydantic import BaseModel, Field, model_validator
-from typing import List, Optional
+
 
 class RoomCategory(str, Enum):
     BEDROOM = "bedroom"
@@ -18,7 +19,7 @@ class RoomIntent(BaseModel):
         ...,
         description="The type category of the room (bedroom, living, kitchen, bathroom, corridor, pooja)."
     )
-    min_area_sqft: Optional[int] = Field(
+    min_area_sqft: int | None = Field(
         None,
         description="Minimum area of the room in square feet. If missing, default to standard Indian minimums (Bedroom: 100, Living Room: 150, Kitchen: 60, Bathroom: 30, others: 50)."
     )
@@ -61,7 +62,11 @@ class CompilerIntent(BaseModel):
         5.0,
         description="Front road setback distance in feet. Defaults to 5.0."
     )
-    rooms: List[RoomIntent] = Field(
+    confidence_score: float = Field(
+        1.0,
+        description="Confidence score of the extraction (0.0 to 1.0). Fallback parser defaults to 0.5."
+    )
+    rooms: list[RoomIntent] = Field(
         default_factory=list,
         description="List of rooms to pack into the floor layout."
     )

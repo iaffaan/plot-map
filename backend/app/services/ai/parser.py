@@ -1,5 +1,105 @@
+import math
 import re
-from typing import Dict, List, Tuple, Any
+from typing import Any
+
+from app.schemas.intent import CompilerIntent, RoomCategory, RoomIntent
+
+PARSER_SYSTEM_PROMPT = (
+    "You are a deterministic Natural Language Parser for an architectural constraint engine. "
+    "Your ONLY objective is to extract parameters into strict JSON. DO NOT design the house. "
+    "DO NOT calculate coordinates. If a user asks for a 'G+1' house, that equals 2 floors. "
+    "Use standard Indian minimums if dimensions are missing."
+)
+
+def parse_requirements_fallback(prompt: str) -> CompilerIntent:
+    """
+    Fallback parser using regular expressions to extract parameters from unstructured prompts
+    when the Gemini API is unavailable or fails.
+    """
+    # 1. Parse plot dimensions (e.g., "40x40", "30x40", "43.75x41")
+    width, depth = 40.0, 40.0
+    dim_match = re.search(r'(\d+(?:\.\d+)?)\s*[x×*]\s*(\d+(?:\.\d+)?)', prompt)
+    if dim_match:
+        width = float(dim_match.group(1))
+        depth = float(dim_match.group(2))
+        
+    # 2. Parse floor count (e.g., "G+1" -> 2, "G+2" -> 3)
+    floors = 1
+    floor_match = re.search(r'g\+(\d+)', prompt, re.IGNORECASE)
+    if floor_match:
+        floors = int(floor_match.group(1)) + 1
+    else:
+        num_floor_match = re.search(r'(\d+)\s*floor', prompt, re.IGNORECASE)
+        if num_floor_match:
+            floors = int(num_floor_match.group(1))
+            
+    # 3. Parse setback (e.g., "setback of 5.0")
+    setback = 5.0
+    setback_match = re.search(r'setback\s+(?:of\s+)?(\d+(?:\.\d+)?)', prompt, re.IGNORECASE)
+    if setback_match:
+        setback = float(setback_match.group(1))
+        
+    # 4. Parse rooms based on enum category matches
+    rooms = []
+    for cat in RoomCategory:
+        if cat.value in prompt.lower():
+            count = 1
+            # Check for counts (e.g., "2 bedrooms")
+            count_match = re.search(r'(\d+)\s*' + cat.value, prompt, re.IGNORECASE)
+            if count_match:
+                count = int(count_match.group(1))
+            for _ in range(count):
+                rooms.append(RoomIntent(room_type=cat))
+                
+    # Fallback default room list if none matched
+    if not rooms:
+        rooms = [
+            RoomIntent(room_type=RoomCategory.BEDROOM),
+            RoomIntent(room_type=RoomCategory.LIVING),
+            RoomIntent(room_type=RoomCategory.KITCHEN),
+            RoomIntent(room_type=RoomCategory.BATHROOM)
+        ]
+        
+    return CompilerIntent(
+        plot_width=width,
+        plot_depth=depth,
+        floors=floors,
+        front_road_setback=setback,
+        confidence_score=0.5,
+        rooms=rooms
+    )
+
+def parse_requirements(prompt: str, client: Any = None) -> CompilerIntent:
+    """
+    Main requirements extraction handler. Attempts to parse unstructured prompt into
+    a structured CompilerIntent using Gemini and the instructor client.
+    Falls back to regex-based parsing on failure.
+    """
+    if client is not None:
+        try:
+            intent: CompilerIntent = client.create(
+                model="gemini-2.5-flash",
+                response_model=CompilerIntent,
+                max_retries=3,  # Instructor handles retry on JSON/Validation error
+                messages=[
+                    {
+                        "role": "system",
+                        "content": PARSER_SYSTEM_PROMPT
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ]
+            )
+            intent.confidence_score = 0.95
+            return intent
+        except Exception as e:  # noqa: BLE001
+            print(f"[AI Layer] LLM call failed ({e}). Using local rule-based parser fallback...")
+            
+    return parse_requirements_fallback(prompt)
+
+
 
 def parse_intent_to_layout(
     description: str,
@@ -7,13 +107,12 @@ def parse_intent_to_layout(
     plot_depth: float,
     setbacks: dict,
     floors: int = 1
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Parses a natural language description and plot parameters into a structured room and stair core configuration.
     Dynamically scales room sizes based on the available buildable area to guarantee solver feasibility.
     """
     # 1. Calculate buildable area
-    # Normalize setbacks keys (support both left/right/bottom/top and left/right/front/back)
     sb_left = float(setbacks.get('left', setbacks.get('left', 0.0)))
     sb_right = float(setbacks.get('right', setbacks.get('right', 0.0)))
     sb_bottom = float(setbacks.get('bottom', setbacks.get('front', 0.0)))
@@ -24,7 +123,6 @@ def parse_intent_to_layout(
     raw_buildable_area = buildable_width * buildable_depth
     
     # 2. Determine stair core size and position
-    # Standard stair core is 8x10 or 10x10. If plot is very small, we can make it 8x8.
     stair_width = 8.0 if buildable_width < 30.0 else 10.0
     stair_height = 8.0 if buildable_depth < 30.0 else 10.0
     
@@ -69,9 +167,6 @@ def parse_intent_to_layout(
             num_bedrooms = 4
             
     # 4. Enforce self-healing limits based on net buildable area
-    # 1 BHK needs at least ~250 sq ft
-    # 2 BHK needs at least ~450 sq ft
-    # 3 BHK needs at least ~700 sq ft
     if net_buildable_area < 380.0 and num_bedrooms > 1:
         num_bedrooms = 1
     elif net_buildable_area < 650.0 and num_bedrooms > 2:
@@ -80,7 +175,6 @@ def parse_intent_to_layout(
         num_bedrooms = 3
         
     # 5. Define base rooms and target proportions of net buildable area
-    # Capped at generous maximums to leave plenty of packing space for the solver.
     rooms_config = []
     adjacencies = []
     
@@ -258,8 +352,7 @@ def parse_intent_to_layout(
         })
         adjacencies.append(("Living Room", "Common Bath"))
         
-    # 6. Safety check: scale down rooms if total exceeds 55% of net buildable area
-    import math
+    # 6. Safety check: scale down rooms if total exceeds 40% of net buildable area
     total_requested_area = sum(r["min_area"] for r in rooms_config)
     safety_target_area = 0.40 * net_buildable_area
     if total_requested_area > safety_target_area:
@@ -279,7 +372,6 @@ def parse_intent_to_layout(
                 abs_min = 80.0
                 
             r["min_area"] = max(abs_min, scaled_area)
-            # Scale down linear dimensions proportionally as well to avoid infeasible aspect ratio constraint locks
             r["min_width"] = max(3.0, r["min_width"] * scale_factor_dim)
             r["min_height"] = max(3.0, r["min_height"] * scale_factor_dim)
             
@@ -288,4 +380,3 @@ def parse_intent_to_layout(
         "rooms": rooms_config,
         "adjacencies": adjacencies
     }
-

@@ -1,5 +1,6 @@
 import networkx as nx
 
+
 def build_room_graph(rooms: list[dict], adjacencies: list[tuple[str, str]]) -> nx.DiGraph:
     """
     Builds a Directed Acyclic Graph (DAG) representing the room access flow.
@@ -30,20 +31,29 @@ def validate_privacy(G: nx.DiGraph, main_door: str = "Main Door") -> tuple[bool,
     # Convert DiGraph to Undirected for access/walkability checking, since movement is bidirectional.
     U = G.to_undirected()
     
-    if main_door not in U:
-        # If Main Door is not in the graph, we find the node of type 'Main Door' or 'Entrance'
-        entrances = [n for n, d in U.nodes(data=True) if d.get('type') in ['Entrance', 'Main Door']]
-        if entrances:
-            main_door = entrances[0]
-        else:
-            return False, "Main Door / Entrance node not found in the graph."
-            
     private_types = {'Bedroom', 'Bathroom'}
     public_types = {'Kitchen', 'Living Room', 'Dining Room', 'Balcony', 'Staircase'}
     
     # Identify target public rooms in the graph
     targets = [n for n, d in U.nodes(data=True) if d.get('type') in public_types or n in public_types]
     
+    # If no public rooms are on this floor, privacy validation passes vacuously
+    if not targets:
+        return True, "Privacy validation passed (no public rooms on this floor)."
+        
+    if main_door not in U:
+        # If Main Door is not in the graph, we find the node of type 'Main Door' or 'Entrance'
+        entrances = [n for n, d in U.nodes(data=True) if d.get('type') in ['Entrance', 'Main Door']]
+        if entrances:
+            main_door = entrances[0]
+        else:
+            # Fallback to Staircase node for upper floors
+            staircases = [n for n, d in U.nodes(data=True) if d.get('type') == 'Staircase' or 'stair' in n.lower()]
+            if staircases:
+                main_door = staircases[0]
+            else:
+                return False, "Main Door / Entrance / Staircase node not found in the graph."
+            
     # Identify all private nodes in the graph
     private_nodes = [
         n for n, d in U.nodes(data=True) 
@@ -69,7 +79,7 @@ def validate_privacy(G: nx.DiGraph, main_door: str = "Main Door") -> tuple[bool,
             
     return True, "Privacy validation passed."
 
-def calculate_ventilation_and_ots(G: nx.DiGraph, setbacks: dict = None) -> tuple[nx.DiGraph, list[dict]]:
+def calculate_ventilation_and_ots(G: nx.DiGraph, setbacks: dict | None = None) -> tuple[nx.DiGraph, list[dict]]:
     """
     Calculates the ventilation distance to the exterior (Air Node).
     If a room requiring ventilation has a distance > 1, it triggers procedural OTS shaft generation.
@@ -89,7 +99,6 @@ def calculate_ventilation_and_ots(G: nx.DiGraph, setbacks: dict = None) -> tuple
         right_val = setbacks.get('right')
         top_val = setbacks.get('top')
         back_val = setbacks.get('back')
-        bottom_val = setbacks.get('bottom')
         
         has_side_ventilation = (
             (left_val is not None and left_val > 0.0) or 
@@ -111,7 +120,7 @@ def calculate_ventilation_and_ots(G: nx.DiGraph, setbacks: dict = None) -> tuple
         lengths = nx.single_source_shortest_path_length(vent_G, "AirNode")
         for node in G.nodes:
             distances[node] = lengths.get(node, float('inf'))
-    except Exception:
+    except Exception:  # noqa: BLE001
         for node in G.nodes:
             distances[node] = float('inf')
             
