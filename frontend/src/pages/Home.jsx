@@ -13,6 +13,7 @@ export default function Home() {
   const [currentStage, setCurrentStage] = useState(undefined)
   const [results, setResults] = useState(null)
   const [showResults, setShowResults] = useState(false)
+  const [explanation, setExplanation] = useState(null)
 
   const handleCompilation = async (params) => {
     setIsLoading(true)
@@ -20,6 +21,7 @@ export default function Home() {
     setCurrentStage(0)
     setBuildingData(null)
     setResults(null)
+    setExplanation(null)
 
     const stages = [
       {
@@ -118,26 +120,28 @@ export default function Home() {
         layout: data.layout,
         boundaries: data.boundaries,
         metadata: data.metadata,
+        floors_data: data.floors,
       })
 
-      // Calculate real metrics from metadata
+      // Map real metrics returned by the backend metrics engine
+      const metrics = data.metrics || {}
       const totalArea = data.metadata.buildable_area_sqft * params.floors
       const usableArea = totalArea * 0.85
-      const plotCoverage = (data.metadata.buildable_area_sqft / (params.plotWidth * params.plotDepth)) * 100
-      const fsi = totalArea / (params.plotWidth * params.plotDepth)
-      const otsCount = data.metadata.ots_generated_count
 
       setResults({
         totalArea: totalArea,
         usableArea: usableArea,
-        plotCoverage: plotCoverage,
-        fsi: fsi,
-        ventilationScore: otsCount > 0 ? 80 + Math.random() * 10 : 95 + Math.random() * 3,
-        daylightScore: 82 + Math.random() * 10,
-        structuralCompliance: 100,
-        estimatedCost: `₹${(totalArea * 3500).toLocaleString('en-IN')}`,
+        plotCoverage: metrics.plot_coverage_pct || 0.0,
+        fsi: metrics.fsi || 0.0,
+        ventilationScore: metrics.cross_ventilation_score || 100.0,
+        daylightScore: metrics.daylighting_score || 100.0,
+        structuralCompliance: metrics.buildability_score || 100.0,
+        estimatedCost: metrics.estimated_cost_inr ? `₹${metrics.estimated_cost_inr.toLocaleString('en-IN')}` : `₹0`,
         constructionTime: `${12 + params.floors * 2} months`,
       })
+
+      // Store AI design explanation
+      setExplanation(data.explanation || null)
 
       setCurrentStage(undefined)
       setShowResults(true)
@@ -226,7 +230,7 @@ export default function Home() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
                 >
-                  <ResultsPanel metrics={results} projectId={`AX-${Math.random().toString(36).substring(7).toUpperCase()}`} isVisible={true} />
+                  <ResultsPanel metrics={results} projectId={`AX-${Math.random().toString(36).substring(7).toUpperCase()}`} isVisible={true} explanation={explanation} />
 
                   <motion.button
                     whileHover={{ scale: 1.02 }}

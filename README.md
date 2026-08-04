@@ -103,7 +103,7 @@ source venv/bin/activate  # On Windows use `venv\Scripts\activate`
 pip install -r requirements.txt
 
 # Run the FastAPI server
-uvicorn main:app --reload
+uvicorn app.main:app --reload
 
 ```
 

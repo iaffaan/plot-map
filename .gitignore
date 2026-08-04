@@ -15,3 +15,8 @@ backend/tmp/
 .env 
 
 node_modules/
+backend/tmp
+.ruff_cache
+.mypy_cache
+
+sample.py

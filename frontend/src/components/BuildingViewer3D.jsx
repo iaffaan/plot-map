@@ -152,42 +152,42 @@ function BuildingModel({ buildingData }) {
       ))}
 
       {/* 6. Layout Rooms Rendered Floor-by-Floor */}
-      {layout && Object.values(layout).map((room) => {
-        // Compute horizontal positions relative to centered plot coordinates
-        const rx = room.x + room.width / 2 - plotWidth / 2
-        const rz = room.y + room.height / 2 - plotDepth / 2
-        const color = roomColors[room.type] || "#cdd6f4"
-        const isOts = room.type === "OTS"
-
-        return Array.from({ length: floors }).map((_, f) => {
+      {buildingData.floors_data ? (
+        Object.entries(buildingData.floors_data).flatMap(([floorIdxStr, floorData]) => {
+          const f = parseInt(floorIdxStr) - 1
           const ry = f * floorHeight + (floorHeight - 0.1) / 2
           
-          return (
-            <group key={`room-${room.name}-floor-${f}`}>
-              {/* Room volume block */}
-              <mesh position={[rx, ry, rz]}>
-                <boxGeometry args={[room.width, floorHeight - 0.15, room.height]} />
-                <meshPhongMaterial 
-                  color={color} 
-                  opacity={isOts ? 0.15 : 0.45} 
-                  transparent 
-                  shininess={isOts ? 0 : 30}
-                />
-              </mesh>
-              
-              {/* Room wireframe wall outlines */}
-              <mesh position={[rx, ry, rz]}>
-                <boxGeometry args={[room.width + 0.02, floorHeight - 0.14, room.height + 0.02]} />
-                <meshBasicMaterial 
-                  color={color} 
-                  wireframe 
-                  opacity={isOts ? 0.3 : 0.8} 
-                  transparent 
-                />
-              </mesh>
+          return Object.entries(floorData.layout || {}).map(([roomName, room]) => {
+            const rx = room.x + room.width / 2 - plotWidth / 2
+            const rz = room.y + room.height / 2 - plotDepth / 2
+            const color = roomColors[room.type] || "#cdd6f4"
+            const isOts = room.type === "OTS"
+            
+            return (
+              <group key={`room-${roomName}-floor-${f}`}>
+                {/* Room volume block */}
+                <mesh position={[rx, ry, rz]}>
+                  <boxGeometry args={[room.width, floorHeight - 0.15, room.height]} />
+                  <meshPhongMaterial 
+                    color={color} 
+                    opacity={isOts ? 0.15 : 0.45} 
+                    transparent 
+                    shininess={isOts ? 0 : 30}
+                  />
+                </mesh>
+                
+                {/* Room wireframe wall outlines */}
+                <mesh position={[rx, ry, rz]}>
+                  <boxGeometry args={[room.width + 0.02, floorHeight - 0.14, room.height + 0.02]} />
+                  <meshBasicMaterial 
+                    color={color} 
+                    wireframe 
+                    opacity={isOts ? 0.3 : 0.8} 
+                    transparent 
+                  />
+                </mesh>
 
-              {/* Room Tag Label (Only on top floor to avoid overlapping overlays, or all floors if simple) */}
-              {f === floors - 1 && (
+                {/* Room Tag Label */}
                 <Html position={[rx, ry + 1.2, rz]} center distanceFactor={12}>
                   <div style={{
                     color: '#ffffff',
@@ -201,17 +201,78 @@ function BuildingModel({ buildingData }) {
                     textAlign: 'center',
                     boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
                   }}>
-                    <span style={{ fontWeight: 'bold', color: color }}>{room.name}</span>
+                    <span style={{ fontWeight: 'bold', color: color }}>{roomName}</span>
                     <div style={{ fontSize: '8px', opacity: 0.65, marginTop: '1px' }}>
                       {room.width}x{room.height} ft
                     </div>
                   </div>
                 </Html>
-              )}
-            </group>
-          )
+              </group>
+            )
+          })
         })
-      })}
+      ) : (
+        layout && Object.values(layout).map((room) => {
+          // Compute horizontal positions relative to centered plot coordinates
+          const rx = room.x + room.width / 2 - plotWidth / 2
+          const rz = room.y + room.height / 2 - plotDepth / 2
+          const color = roomColors[room.type] || "#cdd6f4"
+          const isOts = room.type === "OTS"
+
+          return Array.from({ length: floors }).map((_, f) => {
+            const ry = f * floorHeight + (floorHeight - 0.1) / 2
+            
+            return (
+              <group key={`room-${room.name}-floor-${f}`}>
+                {/* Room volume block */}
+                <mesh position={[rx, ry, rz]}>
+                  <boxGeometry args={[room.width, floorHeight - 0.15, room.height]} />
+                  <meshPhongMaterial 
+                    color={color} 
+                    opacity={isOts ? 0.15 : 0.45} 
+                    transparent 
+                    shininess={isOts ? 0 : 30}
+                  />
+                </mesh>
+                
+                {/* Room wireframe wall outlines */}
+                <mesh position={[rx, ry, rz]}>
+                  <boxGeometry args={[room.width + 0.02, floorHeight - 0.14, room.height + 0.02]} />
+                  <meshBasicMaterial 
+                    color={color} 
+                    wireframe 
+                    opacity={isOts ? 0.3 : 0.8} 
+                    transparent 
+                  />
+                </mesh>
+
+                {/* Room Tag Label */}
+                {f === floors - 1 && (
+                  <Html position={[rx, ry + 1.2, rz]} center distanceFactor={12}>
+                    <div style={{
+                      color: '#ffffff',
+                      background: 'rgba(17, 17, 27, 0.9)',
+                      border: `1px solid ${color}40`,
+                      padding: '3px 8px',
+                      borderRadius: '4px',
+                      fontSize: '10px',
+                      fontFamily: 'monospace',
+                      pointerEvents: 'none',
+                      textAlign: 'center',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
+                    }}>
+                      <span style={{ fontWeight: 'bold', color: color }}>{room.name}</span>
+                      <div style={{ fontSize: '8px', opacity: 0.65, marginTop: '1px' }}>
+                        {room.width}x{room.height} ft
+                      </div>
+                    </div>
+                  </Html>
+                )}
+              </group>
+            )
+          })
+        })
+      )}
     </group>
   )
 }

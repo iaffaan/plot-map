@@ -2,7 +2,7 @@ import { motion } from 'framer-motion'
 import { Download, Share2, Maximize2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
-export function ResultsPanel({ metrics, projectId, isVisible }) {
+export function ResultsPanel({ metrics, projectId, isVisible, explanation }) {
   if (!isVisible || !metrics) return null
 
   const metricGroups = [
@@ -103,6 +103,43 @@ export function ResultsPanel({ metrics, projectId, isVisible }) {
           </div>
         </motion.div>
       ))}
+
+      {/* AI Design Explanation */}
+      {explanation && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="space-y-4 bg-[#11111b]/40 border border-border p-5 rounded-sm"
+        >
+          <h3 className="text-xs uppercase tracking-widest text-primary font-mono border-b border-border/80 pb-3">
+            AI ARCHITECTURAL ANALYSIS
+          </h3>
+          
+          <div className="space-y-4 font-mono text-xs leading-relaxed">
+            <div className="space-y-1">
+              <span className="text-muted-foreground uppercase tracking-wider block font-bold">Concept & Zoning</span>
+              <span className="text-foreground/95">{explanation.overall_concept}</span>
+            </div>
+            <div className="space-y-1">
+              <span className="text-muted-foreground uppercase tracking-wider block font-bold">Kitchen Placement</span>
+              <span className="text-foreground/95">{explanation.kitchen_placement}</span>
+            </div>
+            <div className="space-y-1">
+              <span className="text-muted-foreground uppercase tracking-wider block font-bold">Plumbing Stacking</span>
+              <span className="text-foreground/95">{explanation.plumbing_efficiency}</span>
+            </div>
+            <div className="space-y-1">
+              <span className="text-muted-foreground uppercase tracking-wider block font-bold">Vastu Compliance</span>
+              <span className="text-foreground/95">{explanation.vastu_compliance}</span>
+            </div>
+            <div className="space-y-1">
+              <span className="text-muted-foreground uppercase tracking-wider block font-bold">Circulation Flow</span>
+              <span className="text-foreground/95">{explanation.circulation_efficiency}</span>
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       {/* Action Footer */}
       <div className="border-t border-border pt-6 flex gap-4">
