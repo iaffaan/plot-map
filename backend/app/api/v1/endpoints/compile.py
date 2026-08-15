@@ -101,6 +101,76 @@ def compile_layout(request: CompileRequest, client: Any = Depends(get_gemini_cli
     # 6. Generate natural language explanation explaining layout design decisions
     explanation = explain_layout(request.prompt, compiled_result, client)
     
+    # 7. Generate CAD-quality 2D Drawing (SVG)
+    try:
+        from app.services.relationship_builder import build_tbm_from_layout
+        from app.services.geometry_resolver import resolve_geometry
+        from app.core.design_rules.rule_engine import validate_building_design
+        from app.drawing import Drawing, Polyline, export_drawing_to_svg
+        from app.services.dimension_engine import generate_dimensions
+        from app.services.annotation_engine import generate_annotations
+        from app.drawing.symbols import generate_door_symbol, generate_window_symbol
+        
+        # Build TBM Model
+        building = build_tbm_from_layout(payload, compiled_result)
+        
+        # Validate rules (silent check for warnings/errors)
+        validate_building_design(building, raise_on_error=False)
+        
+        # Resolve 2D Polygons
+        geom = resolve_geometry(building)
+        
+        # Create Drawing
+        drawing = Drawing()
+        
+        # Add Wall Panels
+        for w_id, panels in geom.wall_panels.items():
+            for p in panels:
+                drawing.add(Polyline(
+                    layer="Walls",
+                    color="#1e293b",  # dark slate-800
+                    stroke_width=2.5,
+                    points=p.vertices,
+                    is_closed=True
+                ))
+                
+        # Add Openings (Doors & Windows Symbols)
+        for op_id, op in building.openings.items():
+            box = geom.opening_boxes.get(op_id)
+            if box:
+                wall = building.walls.get(op.wall_id)
+                j1 = building.junctions.get(wall.start_junction_id)
+                j2 = building.junctions.get(wall.end_junction_id)
+                dx = j2.x - j1.x
+                dy = j2.y - j1.y
+                L = (dx**2 + dy**2)**0.5
+                ux, uy = dx / L, dy / L
+                
+                center = op.position_offset
+                h_w = op.width / 2.0
+                x1_op = j1.x + (center - h_w) * ux
+                y1_op = j1.y + (center - h_w) * uy
+                x2_op = j1.x + (center + h_w) * ux
+                y2_op = j1.y + (center + h_w) * uy
+                
+                if op.type == "Door":
+                    for sym_p in generate_door_symbol(x1_op, y1_op, x2_op, y2_op):
+                        drawing.add(sym_p)
+                else:
+                    for sym_p in generate_window_symbol(x1_op, y1_op, x2_op, y2_op, wall.thickness):
+                        drawing.add(sym_p)
+                        
+        # Generate Dimensions
+        generate_dimensions(building, geom, drawing)
+        
+        # Generate Annotations & Title Block
+        generate_annotations(building, geom, drawing)
+        
+        # Export SVG String
+        drawing_svg = export_drawing_to_svg(drawing)
+    except Exception as exc:
+        drawing_svg = f'<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><!-- Drawing Generation Error: {str(exc)} --></svg>'
+        
     return {
         "status": "success",
         "success": True,
@@ -113,5 +183,7 @@ def compile_layout(request: CompileRequest, client: Any = Depends(get_gemini_cli
         "floors": compiled_result.get("floors", {}),
         "metrics": compiled_result.get("metrics", {}),
         "render_tree": compiled_result.get("render_tree", {}),
+        "drawing_svg": drawing_svg,
         "explanation": explanation.model_dump()
     }
+

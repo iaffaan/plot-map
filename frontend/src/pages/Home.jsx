@@ -5,6 +5,8 @@ import { BuildingInputForm } from '@/components/BuildingInputForm'
 import { BuildingViewer3D } from '@/components/BuildingViewer3D'
 import { CompilationStatus } from '@/components/CompilationStatus'
 import { ResultsPanel } from '@/components/ResultsPanel'
+import { CADViewer2D } from '@/components/CADViewer2D'
+
 
 export default function Home() {
   const [buildingData, setBuildingData] = useState(null)
@@ -14,6 +16,7 @@ export default function Home() {
   const [results, setResults] = useState(null)
   const [showResults, setShowResults] = useState(false)
   const [explanation, setExplanation] = useState(null)
+  const [viewMode, setViewMode] = useState('3d')
 
   const handleCompilation = async (params) => {
     setIsLoading(true)
@@ -22,6 +25,8 @@ export default function Home() {
     setBuildingData(null)
     setResults(null)
     setExplanation(null)
+    setViewMode('3d')
+
 
     const stages = [
       {
@@ -121,7 +126,9 @@ export default function Home() {
         boundaries: data.boundaries,
         metadata: data.metadata,
         floors_data: data.floors,
+        drawing_svg: data.drawing_svg,
       })
+
 
       // Map real metrics returned by the backend metrics engine
       const metrics = data.metrics || {}
@@ -195,7 +202,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-6 py-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-light tracking-tight text-foreground">UNCHARTED</h1>
+              <h1 className="text-3xl font-light tracking-tight text-foreground">BuildForgeAI</h1>
               <p className="text-sm text-muted-foreground font-mono mt-1">
                 Constraint-Driven Building Compiler
               </p>
@@ -257,15 +264,43 @@ export default function Home() {
           </div>
 
           {/* Right Panel - 3D Viewer */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-2 space-y-4">
+            {buildingData && (
+              <div className="flex border border-border rounded-sm overflow-hidden bg-[#0d0e15]">
+                <button
+                  onClick={() => setViewMode('3d')}
+                  className={`flex-1 py-3 text-xs font-mono uppercase tracking-wider transition-colors cursor-pointer ${viewMode === '3d'
+                      ? 'bg-primary/10 text-primary font-bold border-r border-border'
+                      : 'text-muted-foreground hover:bg-card/50 hover:text-foreground border-r border-border'
+                    }`}
+                >
+                  3D WebGL Model
+                </button>
+                <button
+                  onClick={() => setViewMode('2d')}
+                  className={`flex-1 py-3 text-xs font-mono uppercase tracking-wider transition-colors cursor-pointer ${viewMode === '2d'
+                      ? 'bg-primary/10 text-primary font-bold'
+                      : 'text-muted-foreground hover:bg-card/50 hover:text-foreground'
+                    }`}
+                >
+                  2D CAD Drawing (Architectural SVG)
+                </button>
+              </div>
+            )}
+
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.2 }}
-              className="border border-border rounded-sm overflow-hidden bg-card aspect-square lg:aspect-auto lg:h-[800px]"
+              className="border border-border rounded-sm overflow-hidden bg-card aspect-square lg:aspect-auto lg:h-[800px] flex items-stretch"
             >
-              <BuildingViewer3D buildingData={buildingData} isLoading={isLoading} />
+              {viewMode === '3d' ? (
+                <BuildingViewer3D buildingData={buildingData} isLoading={isLoading} />
+              ) : (
+                <CADViewer2D svgString={buildingData?.drawing_svg || ""} />
+              )}
             </motion.div>
+
 
             {/* Info Footer */}
             {!buildingData && (

@@ -1,9 +1,52 @@
-# Virtual Environment
-.venv
-venv
+# Python virtual environments
+.venv/
+venv/
+env/
+ENV/
 
-__pycache__
-.pytest_cache
+# Python compiled files
+**/__pycache__/
+*.py[cod]
+*$py.class
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Linter & Type Checker cache
+.ruff_cache/
+.mypy_cache/
+
+# Node.js
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Frontend build outputs
+/frontend/dist/
+/frontend/dist-ssr/
+
+# Environment configurations
+.env
+.env.local
+.env.*.local
+
+# IDE & Editor Settings
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Operating System files
+.DS_Store
+Thumbs.db
+desktop.ini
 
 # Temp solver files and output SVGs
 backend/tmp/
@@ -11,12 +54,5 @@ backend/tmp/
 *.sol
 *.svg
 
-# Environment variable
-.env 
-
-node_modules/
-backend/tmp
-.ruff_cache
-.mypy_cache
-
+# Temporary test scripts
 sample.py
