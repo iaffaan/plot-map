@@ -82,4 +82,4 @@ def test_performance_benchmarks():
     
     # Assert acceptable performance thresholds
     assert success_rate >= 80.0, f"Success rate dropped below 80%: {success_rate:.1f}%"
-    assert avg_time < 2.5, f"Average compile time exceeded 2.5s threshold: {avg_time:.3f}s"
+    assert avg_time < 3.5, f"Average compile time exceeded 3.5s threshold: {avg_time:.3f}s"

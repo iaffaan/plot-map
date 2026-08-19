@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Grid, Html } from '@react-three/drei'
-import * as THREE from 'three'
 
 const roomColors = {
   "Entrance": "#a6adc8",       // Cool Slate

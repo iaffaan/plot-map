@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - main
+      - master
   pull_request:
     branches:
       - main
+      - master
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -29,8 +31,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 'lts/*'
-          check-latest: true
+          node-version: '20'
 
       - name: Cache npm
         uses: actions/cache@v4
@@ -57,7 +58,7 @@ jobs:
           const fs = require('fs');
           const pkg = require('./package.json');
           const exists = p => fs.existsSync(p);
-          const lintConfigFiles = ['.eslintrc.js', '.eslintrc.cjs', '.eslintrc.json', '.eslintrc.yaml', '.eslintrc.yml', 'eslint.config.js'];
+          const lintConfigFiles = ['.eslintrc.js', '.eslintrc.cjs', '.eslintrc.json', '.eslintrc.yaml', '.eslintrc.yml', 'eslint.config.js', '.oxlintrc.json'];
           const prettierConfigFiles = ['.prettierrc', '.prettierrc.json', '.prettierrc.yaml', '.prettierrc.yml', 'prettier.config.js', 'prettier.config.cjs'];
           const eslintConfigExists = lintConfigFiles.some(f => exists(f)) || Boolean(pkg.eslintConfig);
           const hasLintScript = Boolean(pkg.scripts?.lint);
@@ -91,12 +92,10 @@ jobs:
             ? 'npx jest --runInBand'
             : '';
 
-          const hasTestFiles = require('child_process').spawnSync('bash', ['-lc', 'find . -path "./node_modules" -prune -o -type f \( -name "*.test.*" -o -name "*.spec.*" \) -print | grep -q .'], { stdio: 'ignore' }).status === 0;
-          const finalTestCommand = testCommand || '';
           const outputs = {
             lint_command: lintCommand,
             prettier_command: prettierCommand,
-            test_command: finalTestCommand,
+            test_command: testCommand,
           };
           for (const [key, value] of Object.entries(outputs)) {
             fs.appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${value}\n`);
@@ -131,3 +130,37 @@ jobs:
         run: |
           cd frontend
           npm run build
+
+  backend-ci:
+    name: Backend CI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Pytest
+        run: |
+          cd backend
+          pytest

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { 
-  ZoomIn, ZoomOut, Maximize, Eye, EyeOff, Ruler, Download, Printer 
+  ZoomIn, ZoomOut, Maximize, Eye, Ruler, Download, Printer 
 } from 'lucide-react'
 import { Button } from './ui/button'
 
