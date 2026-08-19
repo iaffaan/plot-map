@@ -164,3 +164,13 @@ jobs:
         run: |
           cd backend
           pytest
+
+      - name: Verify FastAPI Uvicorn Application Startup
+        run: |
+          cd backend
+          uvicorn app.main:app --host 127.0.0.1 --port 8000 &
+          SERVER_PID=$!
+          sleep 3
+          curl -f http://127.0.0.1:8000/api/v1/health || (kill $SERVER_PID && exit 1)
+          kill $SERVER_PID
+
