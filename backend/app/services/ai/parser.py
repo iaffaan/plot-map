@@ -69,7 +69,11 @@ def parse_requirements_fallback(prompt: str) -> CompilerIntent:
         rooms=rooms
     )
 
-def parse_requirements(prompt: str, client: Any = None) -> CompilerIntent:
+def parse_requirements(
+    prompt: str,
+    client: Any = None,
+    ai_state: dict[str, Any] | None = None,
+) -> CompilerIntent:
     """
     Main requirements extraction handler. Attempts to parse unstructured prompt into
     a structured CompilerIntent using Gemini and the instructor client.
@@ -80,7 +84,8 @@ def parse_requirements(prompt: str, client: Any = None) -> CompilerIntent:
             intent: CompilerIntent = client.create(
                 model="gemini-2.5-flash",
                 response_model=CompilerIntent,
-                max_retries=3,  # Instructor handles retry on JSON/Validation error
+                max_retries=0,
+                strict=False,
                 messages=[
                     {
                         "role": "system",
@@ -95,6 +100,29 @@ def parse_requirements(prompt: str, client: Any = None) -> CompilerIntent:
             intent.confidence_score = 0.95
             return intent
         except Exception as e:  # noqa: BLE001
+            if ai_state is not None:
+                error_text = str(e).lower()
+                error_type = type(e).__name__.lower()
+                if (
+                    getattr(e, "status_code", None) == 429
+                    or "429" in error_text
+                    or "resource_exhausted" in error_text
+                ):
+                    failure_type = "quota"
+                elif isinstance(e, TimeoutError) or "timeout" in error_type or "timeout" in error_text:
+                    failure_type = "timeout"
+                elif (
+                    isinstance(e, OSError)
+                    or "connection" in error_type
+                    or "remoteprotocol" in error_type
+                    or "disconnected" in error_text
+                ):
+                    failure_type = "network"
+                else:
+                    failure_type = "schema"
+                ai_state["compiler_failed"] = True
+                ai_state["failure_type"] = failure_type
+                ai_state["quota_exhausted"] = failure_type == "quota"
             print(f"[AI Layer] LLM call failed ({e}). Using local rule-based parser fallback...")
             
     return parse_requirements_fallback(prompt)

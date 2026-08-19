@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     # Solver Config
     SOLVER_TIMEOUT_SEC: int = 8
 
+    # Gemini HTTP request timeout, in milliseconds
+    GEMINI_TIMEOUT_MS: int = 10_000
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

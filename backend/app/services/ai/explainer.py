@@ -54,12 +54,17 @@ def explain_layout_fallback(prompt: str, layout_data: dict[str, Any]) -> DesignE
         circulation_efficiency=circulation
     )
 
-def explain_layout(prompt: str, layout_data: dict[str, Any], client: Any = None) -> DesignExplanation:
+def explain_layout(
+    prompt: str,
+    layout_data: dict[str, Any],
+    client: Any = None,
+    ai_state: dict[str, Any] | None = None,
+) -> DesignExplanation:
     """
     Generates a structured architectural explanation of the compiled layout.
     Uses Gemini if client is available; otherwise falls back to a rule-based generator.
     """
-    if client is not None:
+    if client is not None and not (ai_state and ai_state.get("compiler_failed")):
         try:
             # Format compiled data details for the model prompt
             metadata = layout_data.get("metadata", {})

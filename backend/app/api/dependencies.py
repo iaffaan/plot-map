@@ -1,6 +1,7 @@
 from typing import Any
 
 import instructor
+from google.genai import types
 
 from app.core.config import settings
 
@@ -20,7 +21,8 @@ def get_gemini_client() -> Any | None:
         # Initialize instructor with Gemini provider using google-genai
         _gemini_client = instructor.from_provider(
             model="google/gemini-2.5-flash",
-            api_key=api_key
+            api_key=api_key,
+            http_options=types.HttpOptions(timeout=settings.GEMINI_TIMEOUT_MS),
         )
         return _gemini_client
     except Exception as e:  # noqa: BLE001

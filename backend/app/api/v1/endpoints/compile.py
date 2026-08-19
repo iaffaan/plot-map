@@ -34,9 +34,15 @@ def compile_layout(request: CompileRequest, client: Any = Depends(get_gemini_cli
             detail="Prompt cannot be empty."
         )
         
+    ai_state = {
+        "compiler_failed": False,
+        "quota_exhausted": False,
+        "failure_type": None,
+    }
+
     # 1. Parse natural language prompt into CompilerIntent schema
     try:
-        intent = parse_requirements(request.prompt, client)
+        intent = parse_requirements(request.prompt, client, ai_state)
     except Exception as exc:  # noqa: BLE001
         raise AIParserError(
             message="Failed to parse user intent into structural requirements.",
@@ -99,7 +105,7 @@ def compile_layout(request: CompileRequest, client: Any = Depends(get_gemini_cli
             raise OptimizationSolverError(message="Blueprint compilation failed due to solver/boundary constraints.", detail=error_msg)
             
     # 6. Generate natural language explanation explaining layout design decisions
-    explanation = explain_layout(request.prompt, compiled_result, client)
+    explanation = explain_layout(request.prompt, compiled_result, client, ai_state)
     
     # 7. Generate CAD-quality 2D Drawing (SVG)
     try:
