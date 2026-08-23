@@ -94,7 +94,7 @@ The system architecture acts as an Abstract Syntax Tree (AST) compiler for physi
 
 ```bash
 # Clone the repository
-git clone https://github.com/Team-Uncharted/building-compiler.git
+git clone https://github.com/mohdsarfraz08/plot-map.git
 cd building-compiler/backend
 
 # Create virtual environment and install OR/Math dependencies
