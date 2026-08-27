@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { 
-  ZoomIn, ZoomOut, Maximize, Eye, Ruler, Download, Printer 
+  ZoomIn, ZoomOut, RotateCcw, Eye, Ruler, Download, Printer, Maximize2, Minimize2 
 } from 'lucide-react'
 import { Button } from './ui/button'
 
-export function CADViewer2D({ svgString }) {
+export function CADViewer2D({ svgString, isFullscreen, onToggleFullscreen }) {
   const [transform, setTransform] = useState({ scale: 1, x: 0, y: 0 })
   const [activeLayers, setActiveLayers] = useState({
     walls: true,
@@ -180,7 +180,7 @@ export function CADViewer2D({ svgString }) {
             <ZoomOut className="w-4 h-4" />
           </Button>
           <Button variant="outline" size="sm" className="h-8 px-2" onClick={resetView} title="Reset View">
-            <Maximize className="w-4 h-4" />
+            <RotateCcw className="w-4 h-4" />
           </Button>
           
           <div className="h-4 w-[1px] bg-border mx-1" />
@@ -203,6 +203,11 @@ export function CADViewer2D({ svgString }) {
 
         {/* Actions */}
         <div className="flex items-center gap-2">
+          {onToggleFullscreen && (
+            <Button variant="outline" size="sm" className="h-8 w-8 p-0" onClick={onToggleFullscreen} title={isFullscreen ? "Exit Fullscreen (Esc)" : "Fullscreen Mode"}>
+              {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            </Button>
+          )}
           <Button variant="outline" size="sm" className="h-8 px-3 text-xs font-mono" onClick={downloadSVG}>
             <Download className="w-4 h-4 mr-2" /> SVG
           </Button>

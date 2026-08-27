@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Maximize2, Minimize2 } from 'lucide-react'
 import axios from 'axios'
 import { BuildingInputForm } from '@/components/BuildingInputForm'
 import { BuildingViewer3D } from '@/components/BuildingViewer3D'
@@ -17,6 +18,32 @@ export default function Home() {
   const [showResults, setShowResults] = useState(false)
   const [explanation, setExplanation] = useState(null)
   const [viewMode, setViewMode] = useState('3d')
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const viewerContainerRef = useRef(null)
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      if (viewerContainerRef.current?.requestFullscreen) {
+        viewerContainerRef.current.requestFullscreen().catch((err) => {
+          console.error("Error enabling fullscreen:", err)
+        })
+      }
+      setIsFullscreen(true)
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen()
+      }
+      setIsFullscreen(false)
+    }
+  }
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement)
+    }
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
+  }, [])
 
   const handleCompilation = async (params) => {
     setIsLoading(true)
@@ -263,27 +290,43 @@ export default function Home() {
             />
           </div>
 
-          {/* Right Panel - 3D Viewer */}
-          <div className="lg:col-span-2 space-y-4">
+          {/* Right Panel - 3D/2D Viewer */}
+          <div
+            ref={viewerContainerRef}
+            className={
+              isFullscreen
+                ? 'fixed inset-0 z-50 bg-[#07070a] p-4 flex flex-col space-y-3 h-screen w-screen overflow-hidden'
+                : 'lg:col-span-2 space-y-4'
+            }
+          >
             {buildingData && (
-              <div className="flex border border-border rounded-sm overflow-hidden bg-[#0d0e15]">
+              <div className="flex border border-border rounded-sm overflow-hidden bg-[#0d0e15] items-center justify-between">
                 <button
                   onClick={() => setViewMode('3d')}
-                  className={`flex-1 py-3 text-xs font-mono uppercase tracking-wider transition-colors cursor-pointer ${viewMode === '3d'
+                  className={`flex-1 py-3 text-xs font-mono uppercase tracking-wider transition-colors cursor-pointer ${
+                    viewMode === '3d'
                       ? 'bg-primary/10 text-primary font-bold border-r border-border'
                       : 'text-muted-foreground hover:bg-card/50 hover:text-foreground border-r border-border'
-                    }`}
+                  }`}
                 >
                   3D WebGL Model
                 </button>
                 <button
                   onClick={() => setViewMode('2d')}
-                  className={`flex-1 py-3 text-xs font-mono uppercase tracking-wider transition-colors cursor-pointer ${viewMode === '2d'
-                      ? 'bg-primary/10 text-primary font-bold'
-                      : 'text-muted-foreground hover:bg-card/50 hover:text-foreground'
-                    }`}
+                  className={`flex-1 py-3 text-xs font-mono uppercase tracking-wider transition-colors cursor-pointer ${
+                    viewMode === '2d'
+                      ? 'bg-primary/10 text-primary font-bold border-r border-border'
+                      : 'text-muted-foreground hover:bg-card/50 hover:text-foreground border-r border-border'
+                  }`}
                 >
                   2D CAD Drawing (Architectural SVG)
+                </button>
+                <button
+                  onClick={toggleFullscreen}
+                  className="px-3 py-3 text-muted-foreground hover:text-foreground hover:bg-card/50 transition-colors cursor-pointer border-l border-border"
+                  title={isFullscreen ? "Exit Fullscreen (Esc)" : "Fullscreen Mode"}
+                >
+                  {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
                 </button>
               </div>
             )}
@@ -292,12 +335,23 @@ export default function Home() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.2 }}
-              className="border border-border rounded-sm overflow-hidden bg-card aspect-square lg:aspect-auto lg:h-[800px] flex items-stretch"
+              className={`border border-border rounded-sm overflow-hidden bg-card flex items-stretch ${
+                isFullscreen ? 'flex-1 h-full w-full' : 'aspect-square lg:aspect-auto lg:h-[800px]'
+              }`}
             >
               {viewMode === '3d' ? (
-                <BuildingViewer3D buildingData={buildingData} isLoading={isLoading} />
+                <BuildingViewer3D
+                  buildingData={buildingData}
+                  isLoading={isLoading}
+                  isFullscreen={isFullscreen}
+                  onToggleFullscreen={toggleFullscreen}
+                />
               ) : (
-                <CADViewer2D svgString={buildingData?.drawing_svg || ""} />
+                <CADViewer2D
+                  svgString={buildingData?.drawing_svg || ""}
+                  isFullscreen={isFullscreen}
+                  onToggleFullscreen={toggleFullscreen}
+                />
               )}
             </motion.div>
 

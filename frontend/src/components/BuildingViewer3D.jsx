@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Grid, Html } from '@react-three/drei'
+import { Maximize2, Minimize2 } from 'lucide-react'
 
 const roomColors = {
   "Entrance": "#a6adc8",       // Cool Slate
@@ -490,7 +491,18 @@ function BuildingModel({ buildingData, activeFloorFilter }) {
   )
 }
 
-export function BuildingViewer3D({ buildingData, isLoading }) {
+function MockupWireframeMesh() {
+  return (
+    <group position={[0, 6, 0]}>
+      <mesh>
+        <boxGeometry args={[10, 14, 10]} />
+        <meshBasicMaterial color="#252527ff" wireframe />
+      </mesh>
+    </group>
+  )
+}
+
+export function BuildingViewer3D({ buildingData, isLoading, isFullscreen, onToggleFullscreen }) {
   const [activeFloorFilter, setActiveFloorFilter] = useState('all')
 
   return (
@@ -514,6 +526,17 @@ export function BuildingViewer3D({ buildingData, isLoading }) {
             </button>
           ))}
         </div>
+      )}
+
+      {/* Fullscreen Overlay Button for 3D View */}
+      {onToggleFullscreen && (
+        <button
+          onClick={onToggleFullscreen}
+          className="absolute top-4 right-4 z-10 bg-[#0d0e15]/80 hover:bg-card text-muted-foreground hover:text-foreground border border-border p-2 rounded-sm shadow-md transition-colors cursor-pointer flex items-center justify-center"
+          title={isFullscreen ? "Exit Fullscreen (Esc)" : "Fullscreen Mode"}
+        >
+          {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+        </button>
       )}
 
       {/* ThreeJS R3F Canvas */}
@@ -547,8 +570,12 @@ export function BuildingViewer3D({ buildingData, isLoading }) {
             infiniteGrid
           />
 
-          {/* Procedural 3D model generator */}
-          <BuildingModel buildingData={buildingData} activeFloorFilter={activeFloorFilter} />
+          {/* Procedural 3D model generator or Mockup Wireframe Mesh */}
+          {buildingData ? (
+            <BuildingModel buildingData={buildingData} activeFloorFilter={activeFloorFilter} />
+          ) : (
+            <MockupWireframeMesh />
+          )}
 
           {/* Orbit navigation controls */}
           <OrbitControls
