@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     
     # Application Config
     ENVIRONMENT: str = "development"
-    BACKEND_CORS_ORIGINS: list[str] = ["*"]
+    BACKEND_CORS_ORIGINS: list[str] = ["*","http://localhost:5173","https://plot-map-rho.vercel.app/"]
     
     # Solver Config
     SOLVER_TIMEOUT_SEC: int = 8
