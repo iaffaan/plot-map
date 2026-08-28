@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.schemas.design_problem import (
     Constraint,
@@ -19,6 +19,7 @@ class DecisionStatus(str, Enum):
     UNKNOWN = "unknown"
     BLOCKED = "blocked"
     DERIVED = "derived"
+    UNRESOLVED = "unresolved"
 
 
 class ConflictStatus(str, Enum):
@@ -43,6 +44,13 @@ class AnalysisSeverity(str, Enum):
     BLOCKING = "blocking"
 
 
+class RelationshipImpact(str, Enum):
+    IMPROVES = "improves"
+    REDUCES = "reduces"
+    CONSTRAINS = "constrains"
+    DEPENDS_ON = "depends_on"
+
+
 class DecisionDimension(str, Enum):
     SITE_RESPONSE = "site_response"
     PROGRAM_DEFINITION = "program_definition"
@@ -65,14 +73,89 @@ class DecisionDimension(str, Enum):
     COST_STRATEGY = "cost_strategy"
 
 
+def _is_serializable_value(val: Any) -> bool:
+    """Helper to verify if a value consists of JSON-serializable primitives and dicts/lists."""
+    if val is None or isinstance(val, (str, int, float, bool)):
+        return True
+    if isinstance(val, (list, tuple)):
+        return all(_is_serializable_value(item) for item in val)
+    if isinstance(val, dict):
+        return all(isinstance(k, str) and _is_serializable_value(v) for k, v in val.items())
+    return False
+
+
 class DecisionRecord(BaseModel):
     id: str
-    dimension: DecisionDimension
+    dimension: DecisionDimension | str
     subject: str
     value: Any = None
+    alternatives: list[Any] = Field(default_factory=list)
     source_ids: list[str] = Field(default_factory=list)
     status: DecisionStatus
     rationale: str | None = None
+
+    @field_validator("id")
+    @classmethod
+    def validate_id(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("DecisionRecord id cannot be empty")
+        return v
+
+    @field_validator("value", "alternatives")
+    @classmethod
+    def validate_serializable(cls, v: Any) -> Any:
+        if not _is_serializable_value(v):
+            raise ValueError("DecisionRecord value and alternatives must be JSON-serializable types")
+        return v
+
+
+class IncompatibilityRule(BaseModel):
+    id: str
+    dimension_a: DecisionDimension | str
+    value_a: Any
+    dimension_b: DecisionDimension | str
+    value_b: Any
+    explanation: str
+    source_ids: list[str] = Field(default_factory=list)
+
+    @field_validator("id")
+    @classmethod
+    def validate_id(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("IncompatibilityRule id cannot be empty")
+        return v
+
+    @field_validator("value_a", "value_b")
+    @classmethod
+    def validate_serializable(cls, v: Any) -> Any:
+        if not _is_serializable_value(v):
+            raise ValueError("IncompatibilityRule values must be JSON-serializable types")
+        return v
+
+
+class DimensionRelationship(BaseModel):
+    id: str
+    source_dimension: DecisionDimension | str
+    source_value: Any
+    target: str
+    impact: RelationshipImpact
+    explanation: str
+    severity: AnalysisSeverity = AnalysisSeverity.INFO
+    source_ids: list[str] = Field(default_factory=list)
+
+    @field_validator("id")
+    @classmethod
+    def validate_id(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("DimensionRelationship id cannot be empty")
+        return v
+
+    @field_validator("source_value")
+    @classmethod
+    def validate_serializable(cls, v: Any) -> Any:
+        if not _is_serializable_value(v):
+            raise ValueError("DimensionRelationship source_value must be JSON-serializable types")
+        return v
 
 
 class ConflictRecord(BaseModel):
@@ -82,9 +165,16 @@ class ConflictRecord(BaseModel):
     severity: AnalysisSeverity
     status: ConflictStatus
     explanation: str
-    affected_dimensions: list[DecisionDimension] = Field(default_factory=list)
+    affected_dimensions: list[DecisionDimension | str] = Field(default_factory=list)
     resolution_options: list[str] = Field(default_factory=list)
     clarification_question: str | None = None
+
+    @field_validator("id")
+    @classmethod
+    def validate_id(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("ConflictRecord id cannot be empty")
+        return v
 
 
 class UncertaintyRecord(BaseModel):
@@ -92,26 +182,47 @@ class UncertaintyRecord(BaseModel):
     topic: str
     description: str
     materiality: UncertaintyMateriality
-    affected_dimensions: list[DecisionDimension] = Field(default_factory=list)
+    affected_dimensions: list[DecisionDimension | str] = Field(default_factory=list)
     required_for_strategy: bool = False
     clarification_question: str | None = None
     source: RequirementSource = RequirementSource.SYSTEM
 
+    @field_validator("id")
+    @classmethod
+    def validate_id(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("UncertaintyRecord id cannot be empty")
+        return v
+
 
 class DependencyRecord(BaseModel):
     id: str
-    source_dimension: DecisionDimension
-    affected_dimensions: list[DecisionDimension] = Field(default_factory=list)
+    source_dimension: DecisionDimension | str
+    affected_dimensions: list[DecisionDimension | str] = Field(default_factory=list)
     relationship: str
     explanation: str
+
+    @field_validator("id")
+    @classmethod
+    def validate_id(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("DependencyRecord id cannot be empty")
+        return v
 
 
 class FeasibilityConcern(BaseModel):
     id: str
-    dimension: DecisionDimension
+    dimension: DecisionDimension | str
     description: str
     severity: AnalysisSeverity
     source_ids: list[str] = Field(default_factory=list)
+
+    @field_validator("id")
+    @classmethod
+    def validate_id(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("FeasibilityConcern id cannot be empty")
+        return v
 
 
 class ArchitecturalAnalysis(BaseModel):
@@ -125,9 +236,11 @@ class ArchitecturalAnalysis(BaseModel):
     objectives: list[Objective] = Field(default_factory=list)
     conflicts: list[ConflictRecord] = Field(default_factory=list)
     uncertainties: list[UncertaintyRecord] = Field(default_factory=list)
-    decision_dimensions: list[DecisionDimension] = Field(default_factory=list)
+    decision_dimensions: list[DecisionDimension | str] = Field(default_factory=list)
     dependencies: list[DependencyRecord] = Field(default_factory=list)
     feasibility_concerns: list[FeasibilityConcern] = Field(default_factory=list)
+    incompatibilities: list[IncompatibilityRule] = Field(default_factory=list)
+    relationships: list[DimensionRelationship] = Field(default_factory=list)
     provenance: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
@@ -139,6 +252,8 @@ class ArchitecturalAnalysis(BaseModel):
             self.uncertainties,
             self.dependencies,
             self.feasibility_concerns,
+            self.incompatibilities,
+            self.relationships,
         )
         for collection in collections:
             ids = [item.id for item in collection]
