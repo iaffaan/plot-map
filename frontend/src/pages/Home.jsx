@@ -100,7 +100,7 @@ export default function Home() {
       await new Promise((resolve) => setTimeout(resolve, 600))
 
       // Trigger the real compilation API call to the AI Parsing Layer
-      const response = await axios.post('http://127.0.0.1:8000/api/compile', payload)
+      const response = await axios.post('${import.meta.env.VITE_API_URL}/api/compile', payload)
       const data = response.data
 
       if (!data.success && data.status !== 'success') {
