@@ -21,8 +21,8 @@ class FeasibilityExpectation(str, Enum):
 
 class TradeOff(BaseModel):
     id: str
-    improved_dimension: DecisionDimension
-    reduced_dimension: DecisionDimension
+    improved_dimension: DecisionDimension | str
+    reduced_dimension: DecisionDimension | str
     explanation: str
     source_ids: list[str] = Field(default_factory=list)
     severity: AnalysisSeverity
@@ -44,7 +44,7 @@ class DesignStrategy(BaseModel):
     name: str
     approach: str
     decisions: list[DecisionRecord] = Field(default_factory=list)
-    flexible_decisions: list[DecisionDimension] = Field(default_factory=list)
+    flexible_decisions: list[DecisionDimension | str] = Field(default_factory=list)
     requirements_satisfied: list[str] = Field(default_factory=list)
     constraints_addressed: list[str] = Field(default_factory=list)
     preferences_supported: list[str] = Field(default_factory=list)

@@ -8,6 +8,9 @@ from app.schemas.architectural_analysis import (
     DecisionDimension,
     DecisionRecord,
     DecisionStatus,
+    DimensionRelationship,
+    IncompatibilityRule,
+    RelationshipImpact,
     UncertaintyMateriality,
     UncertaintyRecord,
 )
@@ -173,7 +176,6 @@ def test_08_conflict_aware_alternatives():
     strategies = generate_strategies(analysis, problem)
 
     assert len(strategies) >= 2
-    # Verify conflicts are referenced or handled in trade-offs / rationale
     found_conflict_handling = any(
         "conflict" in strat.approach.lower() or "conflict" in strat.rationale.lower() or len(strat.trade_offs) > 0
         for strat in strategies
@@ -264,7 +266,6 @@ def test_15_no_solver_invocation():
 
 
 def test_16_no_external_llm_api_invocation():
-    # Should execute purely offline and synchronously without network/LLM dependencies
     analysis = _sample_analysis()
     strategies = generate_strategies(analysis)
     assert isinstance(strategies, list)
@@ -285,7 +286,6 @@ def test_17_empty_minimal_analysis_behavior():
 
 
 def test_18_four_family_benchmark_generic_fixture():
-    # Benchmark: 44x42 four family
     intent = CompilerIntent(
         plot_width=44.0,
         plot_depth=42.0,
@@ -305,13 +305,11 @@ def test_18_four_family_benchmark_generic_fixture():
     assert len(strategies) >= 1
     for strat in strategies:
         assert strat.source_problem_id == "44x42-benchmark"
-        # Assert no benchmark specific domain class names
         assert "FourFamily" not in type(strat).__name__
         assert "FamilyPerFloor" not in strat.name
 
 
 def test_19_second_generality_fixture_single_family():
-    # Completely different scenario: single-family house on small 30x40 plot
     problem = DesignProblem(
         id="single-family-cottage",
         version=1,
@@ -340,3 +338,338 @@ def test_19_second_generality_fixture_single_family():
         assert strat.source_problem_id == "single-family-cottage"
         assert "pref-privacy-bedrooms" in strat.preferences_supported
         assert "obj-area-eff" in strat.objectives_targeted
+
+
+# =====================================================================
+# STAGE 3B.3B — GENERIC DATA-DRIVEN ENGINE & GENERALITY TESTS
+# =====================================================================
+
+
+def test_3b3b_single_unseen_dimension_generality():
+    analysis = ArchitecturalAnalysis(
+        problem_id="prob-unseen-ventilation",
+        problem_version=1,
+        summary="Analysis with unseen ventilation dimension.",
+        flexible_decisions=[
+            DecisionRecord(
+                id="dec-vent",
+                dimension="natural_ventilation_strategy",
+                subject="building",
+                alternatives=["courtyard", "cross_ventilation", "mechanical_assistance"],
+                status=DecisionStatus.UNRESOLVED,
+            )
+        ],
+    )
+
+    strategies = generate_strategies(analysis)
+
+    assert len(strategies) == 3
+    produced_values = {
+        dec.value
+        for s in strategies
+        for dec in s.decisions
+        if dec.dimension == "natural_ventilation_strategy"
+    }
+    assert produced_values == {"courtyard", "cross_ventilation", "mechanical_assistance"}
+
+
+def test_3b3b_multiple_unseen_dimensions_cartesian():
+    analysis = ArchitecturalAnalysis(
+        problem_id="prob-multi-unseen",
+        problem_version=1,
+        summary="Multi-dimension unseen analysis.",
+        flexible_decisions=[
+            DecisionRecord(
+                id="dec-vent",
+                dimension="natural_ventilation_strategy",
+                subject="building",
+                alternatives=["courtyard", "cross_ventilation"],
+                status=DecisionStatus.UNRESOLVED,
+            ),
+            DecisionRecord(
+                id="dec-struct",
+                dimension="structural_system",
+                subject="building",
+                alternatives=["load_bearing", "steel_frame"],
+                status=DecisionStatus.UNRESOLVED,
+            ),
+        ],
+    )
+
+    strategies = generate_strategies(analysis)
+
+    assert len(strategies) == 4
+    combos = {
+        (
+            next(d.value for d in s.decisions if d.dimension == "natural_ventilation_strategy"),
+            next(d.value for d in s.decisions if d.dimension == "structural_system"),
+        )
+        for s in strategies
+    }
+    expected_combos = {
+        ("courtyard", "load_bearing"),
+        ("courtyard", "steel_frame"),
+        ("cross_ventilation", "load_bearing"),
+        ("cross_ventilation", "steel_frame"),
+    }
+    assert combos == expected_combos
+
+
+def test_3b3b_numeric_and_boolean_unseen_dimensions():
+    analysis = ArchitecturalAnalysis(
+        problem_id="prob-num-bool",
+        problem_version=1,
+        summary="Numeric and boolean dynamic choices.",
+        flexible_decisions=[
+            DecisionRecord(
+                id="dec-floors",
+                dimension="target_floor_count",
+                subject="building",
+                alternatives=[1, 2, 3],
+                status=DecisionStatus.UNRESOLVED,
+            ),
+            DecisionRecord(
+                id="dec-elevator",
+                dimension="has_elevator",
+                subject="circulation",
+                alternatives=[True, False],
+                status=DecisionStatus.UNRESOLVED,
+            ),
+        ],
+    )
+
+    strategies = generate_strategies(analysis)
+
+    assert len(strategies) == 6
+    for s in strategies:
+        floor_val = next(d.value for d in s.decisions if d.dimension == "target_floor_count")
+        elev_val = next(d.value for d in s.decisions if d.dimension == "has_elevator")
+        assert floor_val in [1, 2, 3]
+        assert elev_val in [True, False]
+
+
+def test_3b3b_structured_serializable_alternatives():
+    analysis = ArchitecturalAnalysis(
+        problem_id="prob-struct-alt",
+        problem_version=1,
+        summary="Structured dictionary choices.",
+        flexible_decisions=[
+            DecisionRecord(
+                id="dec-core",
+                dimension="service_core",
+                subject="service",
+                alternatives=[
+                    {"type": "central", "min_width": 6.0},
+                    {"type": "distributed", "min_width": 4.0},
+                ],
+                status=DecisionStatus.UNRESOLVED,
+            )
+        ],
+    )
+
+    strategies = generate_strategies(analysis)
+
+    assert len(strategies) == 2
+    types = [
+        next(d.value for d in s.decisions if d.dimension == "service_core")["type"]
+        for s in strategies
+    ]
+    assert "central" in types
+    assert "distributed" in types
+
+
+def test_3b3b_incompatibility_rule_filtering():
+    analysis = ArchitecturalAnalysis(
+        problem_id="prob-incompat-filter",
+        problem_version=1,
+        summary="Incompatibility rule test.",
+        flexible_decisions=[
+            DecisionRecord(
+                id="dec-struct",
+                dimension="structural_system",
+                subject="building",
+                alternatives=["load_bearing", "steel_frame"],
+                status=DecisionStatus.UNRESOLVED,
+            ),
+            DecisionRecord(
+                id="dec-layout",
+                dimension="spatial_layout",
+                subject="building",
+                alternatives=["cellular", "large_open_span"],
+                status=DecisionStatus.UNRESOLVED,
+            ),
+        ],
+        incompatibilities=[
+            IncompatibilityRule(
+                id="incompat-1",
+                dimension_a="structural_system",
+                value_a="load_bearing",
+                dimension_b="spatial_layout",
+                value_b="large_open_span",
+                explanation="Load bearing walls prohibit large open column-free spans.",
+            )
+        ],
+    )
+
+    strategies = generate_strategies(analysis)
+
+    # 4 potential Cartesian combinations - 1 prohibited = 3 strategies
+    assert len(strategies) == 3
+    for s in strategies:
+        struct_val = next(d.value for d in s.decisions if d.dimension == "structural_system")
+        layout_val = next(d.value for d in s.decisions if d.dimension == "spatial_layout")
+        assert not (struct_val == "load_bearing" and layout_val == "large_open_span")
+
+
+def test_3b3b_dynamic_relationship_and_tradeoff_derivation():
+    analysis = ArchitecturalAnalysis(
+        problem_id="prob-rel-tradeoff",
+        problem_version=1,
+        summary="Dynamic relationship trade-off test.",
+        flexible_decisions=[
+            DecisionRecord(
+                id="dec-vent",
+                dimension="natural_ventilation_strategy",
+                subject="building",
+                alternatives=["courtyard", "mechanical_assistance"],
+                status=DecisionStatus.UNRESOLVED,
+            )
+        ],
+        relationships=[
+            DimensionRelationship(
+                id="rel-courtyard-area",
+                source_dimension="natural_ventilation_strategy",
+                source_value="courtyard",
+                target="usable_floor_area",
+                impact=RelationshipImpact.REDUCES,
+                explanation="Courtyard lightwell subtracts gross floor area.",
+                severity=AnalysisSeverity.WARNING,
+            )
+        ],
+    )
+
+    strategies = generate_strategies(analysis)
+
+    assert len(strategies) == 2
+    courtyard_strat = next(
+        s for s in strategies
+        if any(d.dimension == "natural_ventilation_strategy" and d.value == "courtyard" for d in s.decisions)
+    )
+
+    assert len(courtyard_strat.trade_offs) == 1
+    to = courtyard_strat.trade_offs[0]
+    assert to.id == "tradeoff-rel-courtyard-area"
+    assert to.reduced_dimension == "usable_floor_area"
+    assert "subtracts gross floor area" in to.explanation
+
+
+def test_3b3b_architectural_knowledge_decoupling_test():
+    analysis = ArchitecturalAnalysis(
+        problem_id="prob-decoupled-domain",
+        problem_version=1,
+        summary="Domain decoupling test.",
+        flexible_decisions=[
+            DecisionRecord(
+                id="dec-custom",
+                dimension="custom_dimension",
+                subject="building",
+                alternatives=["A", "B"],
+                status=DecisionStatus.UNRESOLVED,
+            )
+        ],
+        relationships=[
+            DimensionRelationship(
+                id="rel-custom",
+                source_dimension="custom_dimension",
+                source_value="A",
+                target="custom_objective",
+                impact=RelationshipImpact.IMPROVES,
+                explanation="Choice A improves custom objective dynamically.",
+            )
+        ],
+    )
+
+    strategies = generate_strategies(analysis)
+
+    assert len(strategies) == 2
+    strat_a = next(
+        s for s in strategies
+        if any(d.dimension == "custom_dimension" and d.value == "A" for d in s.decisions)
+    )
+    assert len(strat_a.trade_offs) == 1
+    assert strat_a.trade_offs[0].improved_dimension == "custom_objective"
+
+
+def test_3b3b_unseen_brand_new_custom_dimension():
+    analysis = ArchitecturalAnalysis(
+        problem_id="prob-brand-new",
+        problem_version=1,
+        summary="Brand new custom dimension test.",
+        flexible_decisions=[
+            DecisionRecord(
+                id="dec-brand-new",
+                dimension="brand_new_custom_dimension",
+                subject="building",
+                alternatives=["OptionX", "OptionY", "OptionZ"],
+                status=DecisionStatus.UNRESOLVED,
+            )
+        ],
+    )
+
+    strategies = generate_strategies(analysis)
+
+    assert len(strategies) == 3
+    vals = {
+        next(d.value for d in s.decisions if d.dimension == "brand_new_custom_dimension")
+        for s in strategies
+    }
+    assert vals == {"OptionX", "OptionY", "OptionZ"}
+
+
+def test_3b3b_combination_limit_bounding():
+    # 5 dimensions with 4 choices each = 1024 potential combinations
+    analysis = ArchitecturalAnalysis(
+        problem_id="prob-combinatorial-explosion",
+        problem_version=1,
+        summary="Combinatorial limit bounding test.",
+        flexible_decisions=[
+            DecisionRecord(
+                id=f"dec-{i}",
+                dimension=f"dim_{i}",
+                subject="building",
+                alternatives=["val_1", "val_2", "val_3", "val_4"],
+                status=DecisionStatus.UNRESOLVED,
+            )
+            for i in range(1, 6)
+        ],
+    )
+
+    strategies = generate_strategies(analysis, max_strategies=10)
+
+    # Must safely stop and bound strategies to max_strategies (default 10)
+    assert len(strategies) <= 10
+
+
+def test_3b3b_deterministic_repeated_execution_generic():
+    analysis = ArchitecturalAnalysis(
+        problem_id="prob-det-generic",
+        problem_version=1,
+        summary="Deterministic execution test on generic inputs.",
+        flexible_decisions=[
+            DecisionRecord(
+                id="dec-1",
+                dimension="daylight_strategy",
+                subject="building",
+                alternatives=["side_lighting", "top_lighting", "atrium"],
+                status=DecisionStatus.UNRESOLVED,
+            )
+        ],
+    )
+
+    run1 = generate_strategies(analysis)
+    run2 = generate_strategies(analysis)
+
+    assert len(run1) == 3
+    assert len(run2) == 3
+    for s1, s2 in zip(run1, run2):
+        assert s1.model_dump() == s2.model_dump()
