@@ -1,8 +1,4 @@
-For **Antigravity**, I would not ask it to "build a floor plan." That's too broad. Instead, make it implement the system in well-defined engineering phases. This reduces mistakes and keeps every change testable.
-
----
-
-# Antigravity Implementation Roadmap
+# Implementation Roadmap
 
 ## Phase 0 — Project Foundation
 
