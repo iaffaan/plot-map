@@ -316,7 +316,7 @@ Ask clarification when appropriate
 
 ## Stage 3B — Design Strategy Generation
 
-**Status: Next Step**
+**Status: IN PROGRESS**
 
 ```text
 ArchitecturalAnalysis
@@ -326,18 +326,27 @@ Strategy Generator
 DesignStrategy[]
 ```
 
-A strategy represents a possible architectural approach, not exact geometry.
+A strategy represents a conceptual architectural approach, not exact geometry.
 
-Examples:
+### Sub-stages & Progress:
 
-- shared circulation
-- independent circulation
-- hybrid circulation
-- single-floor units
-- stacked units
-- mixed unit arrangement
+- **Stage 3B.1 — DesignStrategy Schema** (**COMPLETE**)  
+  Introduced non-geometric `DesignStrategy`, `DecisionRecord`, `TradeOff`, `StrategyRisk`, and `FeasibilityExpectation` schemas.
 
-Strategies must emerge from the design problem and must not be hardcoded around the benchmark.
+- **Stage 3B.2 — StrategyGenerator Baseline Infrastructure** (**COMPLETE**)  
+  Established baseline deterministic pipeline: requirement traceability, constraint filtering, uncertainty propagation, fingerprint deduplication, deterministic ordering, and strategy limit bounding.
+
+- **Stage 3B.3 — Generic Data-Driven Generation Engine** (**NEXT STEP**)  
+  Removes domain-dimension coupling (`VERTICAL_CIRCULATION`, `ENTRANCE_STRATEGY`) and replaces hardcoded archetypes with a pure data-driven reasoning engine.
+  - **Stage 3B.3A**: Analysis Data Contract (`DecisionRecord.alternatives`, `IncompatibilityRule`, `DimensionRelationship`) + tests.
+  - **Stage 3B.3B**: Generic Strategy Engine (Bounded Cartesian combination, dynamic filtering, dynamic trade-off derivation) + unseen dimension tests.
+  - **Stage 3B.3C**: Legacy Archetype Removal & Full Regression.
+
+- **Stage 3B.4 — Strategy Validation & Constraint Engine** (**PLANNED**)
+
+- **Stage 3B.5 — Strategy Ranking & Candidate Selection** (**PLANNED**)
+
+Strategies emerge directly from the design problem and must never be hardcoded around a benchmark or specific building type.
 
 ---
 
