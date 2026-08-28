@@ -2,7 +2,7 @@
 
 **Phase**: 3 — Architectural Reasoning  
 **Stage**: 3B.3 — Generic Data-Driven Strategy Generation  
-**Document Status**: Canonical Architecture Specification  
+**Document Status**: Canonical Architecture Specification — Stage 3B.3C Complete  
 
 ---
 
@@ -190,20 +190,30 @@ Without modifying `strategy_generator.py`, the engine MUST successfully generate
 To maintain code stability and clear testing checkpoints:
 
 ```text
-3B.3A — Schema Data Contract & Tests
+3B.3A — Schema Data Contract & Tests  ✅
         - Add alternatives to DecisionRecord
         - Add IncompatibilityRule and DimensionRelationship to ArchitecturalAnalysis
         - Add schema validation unit tests
         
-3B.3B — Generic Strategy Engine & Tests
+3B.3B — Generic Strategy Engine & Tests  ✅
         - Implement data-driven combination enumeration
         - Implement dynamic constraint/incompatibility filtering
         - Implement dynamic trade-off derivation
         - Implement unseen-dimension unit tests
 
-3B.3C — Legacy Hardcoded Archetype Removal & Full Regression
-        - Remove legacy hardcoded dimension branches from strategy_generator.py
-        - Verify complete regression suite (all 59+ backend tests passing)
+3B.3C — Legacy Hardcoded Archetype Removal & Full Regression  ✅
+        3B.3C-1: Legacy audit — classify all hardcoded legacy rules
+        3B.3C-2: Declarative Decision Catalog (decision_catalog.json)
+                 - catalog_loader.py: deterministic JSON loader
+                 - ArchitecturalAnalyzer: generic catalog integration
+        3B.3C-3: Golden migration tests — semantic equivalence verified
+        3B.3C-4: Legacy Path B removed from StrategyGenerator
+                 - Hardcoded archetype archetypes removed
+                 - Legacy trade-off fallback removed
+                 - RequirementKind branching removed from generator
+                 - _build_uncontested_hard_reqs reads fixed_decisions generically
+                 - Legacy absence regression test added (AST-based guard)
+                 - 85/85 tests passing
 ```
 
 ---

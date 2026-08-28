@@ -316,7 +316,7 @@ Ask clarification when appropriate
 
 ## Stage 3B — Design Strategy Generation
 
-**Status: IN PROGRESS**
+**Status: IN PROGRESS** (3B.3 Complete, 3B.4 PLANNED)
 
 ```text
 ArchitecturalAnalysis
@@ -336,11 +336,15 @@ A strategy represents a conceptual architectural approach, not exact geometry.
 - **Stage 3B.2 — StrategyGenerator Baseline Infrastructure** (**COMPLETE**)  
   Established baseline deterministic pipeline: requirement traceability, constraint filtering, uncertainty propagation, fingerprint deduplication, deterministic ordering, and strategy limit bounding.
 
-- **Stage 3B.3 — Generic Data-Driven Generation Engine** (**NEXT STEP**)  
-  Removes domain-dimension coupling (`VERTICAL_CIRCULATION`, `ENTRANCE_STRATEGY`) and replaces hardcoded archetypes with a pure data-driven reasoning engine.
-  - **Stage 3B.3A**: Analysis Data Contract (`DecisionRecord.alternatives`, `IncompatibilityRule`, `DimensionRelationship`) + tests.
-  - **Stage 3B.3B**: Generic Strategy Engine (Bounded Cartesian combination, dynamic filtering, dynamic trade-off derivation) + unseen dimension tests.
-  - **Stage 3B.3C**: Legacy Archetype Removal & Full Regression.
+- **Stage 3B.3 — Generic Data-Driven Generation Engine** (**COMPLETE** ✅)  
+  Removed domain-dimension coupling and replaced hardcoded archetypes with a pure data-driven reasoning engine.
+  - **Stage 3B.3A** ✅: Analysis Data Contract (`DecisionRecord.alternatives`, `IncompatibilityRule`, `DimensionRelationship`) + tests.
+  - **Stage 3B.3B** ✅: Generic Strategy Engine (Bounded Cartesian combination, dynamic filtering, dynamic trade-off derivation) + unseen dimension tests.
+  - **Stage 3B.3C** ✅: Legacy Archetype Removal & Full Regression.
+    - **3B.3C-1** ✅: Legacy audit — all hardcoded rules classified.
+    - **3B.3C-2** ✅: Declarative Decision Catalog (`decision_catalog.json` + `catalog_loader.py`) created. `ArchitecturalAnalyzer` generically populates `DecisionRecord.alternatives` from catalog with no `if/elif` domain branches.
+    - **3B.3C-3** ✅: Golden migration tests — semantic equivalence verified against benchmark.
+    - **3B.3C-4** ✅: Legacy Path B removed from `StrategyGenerator`. `RequirementKind` branching removed from generator. AST-based legacy absence regression test added. **85/85 tests passing.**
 
 - **Stage 3B.4 — Strategy Validation & Constraint Engine** (**PLANNED**)
 
