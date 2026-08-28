@@ -99,7 +99,7 @@ cd building-compiler/backend
 
 # Create virtual environment and install OR/Math dependencies
 python -m venv venv
-source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+venv\Scripts\activate  # On macos use `source venv/bin/activate`
 pip install -r requirements.txt
 
 # Run the FastAPI server
