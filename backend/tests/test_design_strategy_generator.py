@@ -673,3 +673,124 @@ def test_3b3b_deterministic_repeated_execution_generic():
     assert len(run2) == 3
     for s1, s2 in zip(run1, run2):
         assert s1.model_dump() == s2.model_dump()
+
+
+# =====================================================================
+# STAGE 3B.3C-3 — GOLDEN MIGRATION & CATALOG GENERALITY TESTS
+# =====================================================================
+
+
+def test_3b3c_golden_semantic_migration_benchmark():
+    """Verify that catalog-driven analysis reproduces all semantic behavior of 44x42 benchmark."""
+    intent = CompilerIntent(
+        plot_width=44.0,
+        plot_depth=42.0,
+        front_road_setback=5.0,
+        floors=4,
+        rooms=[
+            RoomIntent(room_type=RoomCategory.LIVING, min_area_sqft=150.0),
+            RoomIntent(room_type=RoomCategory.KITCHEN, min_area_sqft=80.0),
+            RoomIntent(room_type=RoomCategory.BEDROOM, min_area_sqft=120.0),
+            RoomIntent(room_type=RoomCategory.BATHROOM, min_area_sqft=40.0),
+        ],
+    )
+    problem = to_design_problem(intent, problem_id="44x42-golden-benchmark")
+    analysis = analyze_design_problem(problem)
+
+    # 1. Verify flexible decisions have catalog alternatives attached natively
+    vert_circ_dec = next(
+        (d for d in analysis.flexible_decisions if d.dimension is DecisionDimension.VERTICAL_CIRCULATION),
+        None,
+    )
+    assert vert_circ_dec is not None
+    assert vert_circ_dec.alternatives == ["shared", "independent", "hybrid"]
+
+    # 2. Generate strategies
+    strategies = generate_strategies(analysis, problem)
+
+    # 3. Semantic Verification
+    assert len(strategies) >= 1
+    assert len(strategies) <= 10  # strategy bounds
+
+    # Decision dimension preservation
+    all_dec_dims = {dec.dimension for s in strategies for dec in s.decisions}
+    assert DecisionDimension.VERTICAL_CIRCULATION in all_dec_dims
+
+    # Trade-offs derived from catalog relationships
+    tradeoff_strategies = [s for s in strategies if len(s.trade_offs) > 0]
+    assert len(tradeoff_strategies) > 0
+
+    # Deterministic fingerprinting
+    fps = [_compute_fingerprint(s.decisions) for s in strategies]
+    assert len(fps) == len(set(fps))
+
+
+def test_3b3c_critical_generality_temporary_custom_catalog(tmp_path):
+    """Critical test: A new catalog entry is loaded and processed without Python code modifications."""
+    import json
+    from app.services.analysis.catalog_loader import load_decision_catalog
+
+    custom_catalog_data = {
+        "version": 1,
+        "dimensions": {
+            "brand_new_catalog_dimension": {
+                "alternatives": ["Alpha", "Beta", "Gamma"]
+            }
+        },
+        "incompatibilities": [],
+        "relationships": [],
+    }
+    catalog_path = tmp_path / "custom_catalog.json"
+    catalog_path.write_text(json.dumps(custom_catalog_data), encoding="utf-8")
+
+    loaded_catalog = load_decision_catalog(catalog_path)
+
+    # Construct analysis using custom catalog
+    analysis = ArchitecturalAnalysis(
+        problem_id="prob-custom-cat",
+        problem_version=1,
+        summary="Custom catalog analysis",
+        flexible_decisions=[
+            DecisionRecord(
+                id="dec-custom-cat",
+                dimension="brand_new_catalog_dimension",
+                subject="building",
+                alternatives=loaded_catalog["dimensions"]["brand_new_catalog_dimension"]["alternatives"],
+                status=DecisionStatus.UNRESOLVED,
+            )
+        ],
+    )
+
+    strategies = generate_strategies(analysis)
+
+    assert len(strategies) == 3
+    produced_vals = {
+        next(d.value for d in s.decisions if d.dimension == "brand_new_catalog_dimension")
+        for s in strategies
+    }
+    assert produced_vals == {"Alpha", "Beta", "Gamma"}
+
+
+def test_3b3c_unknown_dimension_without_catalog_entry():
+    """Verify that unknown dimensions without catalog entries process cleanly without error."""
+    problem = DesignProblem(
+        id="prob-unknown-dim",
+        site=SiteDefinition(plot_width=30.0, plot_depth=30.0, floors=1),
+    )
+    analysis = analyze_design_problem(problem)
+
+    # Add an unknown dimension with no alternatives
+    analysis.flexible_decisions.append(
+        DecisionRecord(
+            id="dec-unknown",
+            dimension="unseen_exotic_dimension",
+            subject="building",
+            alternatives=[],
+            status=DecisionStatus.UNRESOLVED,
+        )
+    )
+
+    # Must execute cleanly without inventing fake alternatives
+    strategies = generate_strategies(analysis)
+    assert len(strategies) >= 1
+

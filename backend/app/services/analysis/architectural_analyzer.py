@@ -1,4 +1,5 @@
 from collections.abc import Iterable
+from typing import Any
 
 from app.schemas.architectural_analysis import (
     AnalysisSeverity,
@@ -9,7 +10,9 @@ from app.schemas.architectural_analysis import (
     DecisionRecord,
     DecisionStatus,
     DependencyRecord,
+    DimensionRelationship,
     FeasibilityConcern,
+    IncompatibilityRule,
     UncertaintyMateriality,
     UncertaintyRecord,
 )
@@ -21,6 +24,18 @@ from app.schemas.design_problem import (
     RequirementKind,
     RequirementStrength,
 )
+from app.services.analysis.catalog_loader import (
+    get_catalog_alternatives,
+    get_catalog_incompatibilities,
+    get_catalog_relationships,
+    load_decision_catalog,
+)
+
+
+def _dim_to_str(dim: Any) -> str:
+    if hasattr(dim, "value"):
+        return str(dim.value)
+    return str(dim)
 
 
 _FLEXIBLE_DIMENSIONS = (
@@ -121,8 +136,11 @@ def _explicit_decisions(problem: DesignProblem) -> list[DecisionRecord]:
     return decisions
 
 
-def _flexible_decisions(problem: DesignProblem, fixed: list[DecisionRecord]) -> list[DecisionRecord]:
-    # A known floor count does not determine how spaces are allocated across floors.
+def _flexible_decisions(
+    problem: DesignProblem,
+    fixed: list[DecisionRecord],
+    catalog: dict[str, Any] | None = None,
+) -> list[DecisionRecord]:
     fixed_dimensions = {
         decision.dimension
         for decision in fixed
@@ -131,11 +149,13 @@ def _flexible_decisions(problem: DesignProblem, fixed: list[DecisionRecord]) -> 
     flexible: list[DecisionRecord] = []
     for dimension in _FLEXIBLE_DIMENSIONS:
         if dimension not in fixed_dimensions:
+            catalog_alts = get_catalog_alternatives(dimension, catalog=catalog)
             flexible.append(
                 DecisionRecord(
-                    id=f"flexible-{dimension.value}",
+                    id=f"flexible-{_dim_to_str(dimension)}",
                     dimension=dimension,
                     subject="building",
+                    alternatives=catalog_alts,
                     status=DecisionStatus.FLEXIBLE,
                     rationale="No final value for this architectural dimension is specified.",
                 )
@@ -299,10 +319,29 @@ def _feasibility_concerns(problem: DesignProblem) -> list[FeasibilityConcern]:
     return []
 
 
-def analyze_design_problem(problem: DesignProblem) -> ArchitecturalAnalysis:
-    """Build a deterministic, non-geometric analysis of a DesignProblem."""
+def analyze_design_problem(
+    problem: DesignProblem,
+    catalog: dict[str, Any] | None = None,
+) -> ArchitecturalAnalysis:
+    """
+    Build a deterministic, non-geometric analysis of a DesignProblem.
+    Generically integrates candidate decision alternatives, incompatibilities, and relationships
+    from the declarative Decision Catalog.
+    """
+    if catalog is None:
+        try:
+            catalog = load_decision_catalog()
+        except (FileNotFoundError, ValueError):
+            catalog = {}
+
     fixed_decisions = _explicit_decisions(problem)
-    flexible_decisions = _flexible_decisions(problem, fixed_decisions)
+    flexible_decisions = _flexible_decisions(problem, fixed_decisions, catalog=catalog)
+
+    # Attach catalog alternatives generically if not already present
+    for record in flexible_decisions:
+        if not record.alternatives:
+            record.alternatives = get_catalog_alternatives(record.dimension, catalog=catalog)
+
     dimensions = _unique_in_order(
         [decision.dimension for decision in fixed_decisions]
         + [decision.dimension for decision in flexible_decisions]
@@ -326,6 +365,9 @@ def analyze_design_problem(problem: DesignProblem) -> ArchitecturalAnalysis:
     dependencies = _dependencies(set(dimensions))
     feasibility_concerns = _feasibility_concerns(problem)
 
+    incompatibilities = get_catalog_incompatibilities(catalog=catalog)
+    relationships = get_catalog_relationships(catalog=catalog)
+
     return ArchitecturalAnalysis(
         problem_id=problem.id,
         problem_version=problem.version,
@@ -344,6 +386,8 @@ def analyze_design_problem(problem: DesignProblem) -> ArchitecturalAnalysis:
         decision_dimensions=dimensions,
         dependencies=dependencies,
         feasibility_concerns=feasibility_concerns,
+        incompatibilities=incompatibilities,
+        relationships=relationships,
         provenance={
             "analyzer": "deterministic-rule-based",
             "source_problem_id": problem.id,

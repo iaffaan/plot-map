@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "dimensions": {
+    "vertical_circulation": {
+      "alternatives": ["shared", "independent", "hybrid"]
+    },
+    "unit_organization": {
+      "alternatives": ["stacked", "distributed", "grouped"]
+    },
+    "entrance_strategy": {
+      "alternatives": ["shared", "independent", "controlled_shared"]
+    },
+    "floor_allocation": {
+      "alternatives": ["ground_floor_only", "distributed"]
+    },
+    "service_core_strategy": {
+      "alternatives": ["centralized", "decentralized", "hybrid_core"]
+    }
+  },
+  "incompatibilities": [],
+  "relationships": [
+    {
+      "id": "rel-indep-circ-privacy",
+      "source_dimension": "vertical_circulation",
+      "source_value": "independent",
+      "target": "privacy",
+      "impact": "improves",
+      "explanation": "Independent circulation cores increase user privacy.",
+      "severity": "info"
+    },
+    {
+      "id": "rel-indep-circ-area",
+      "source_dimension": "vertical_circulation",
+      "source_value": "independent",
+      "target": "circulation",
+      "impact": "reduces",
+      "explanation": "Independent circulation cores require additional circulation area.",
+      "severity": "warning"
+    },
+    {
+      "id": "rel-shared-circ-area",
+      "source_dimension": "vertical_circulation",
+      "source_value": "shared",
+      "target": "circulation",
+      "impact": "improves",
+      "explanation": "Shared vertical circulation minimizes core footprint.",
+      "severity": "info"
+    },
+    {
+      "id": "rel-shared-circ-privacy",
+      "source_dimension": "vertical_circulation",
+      "source_value": "shared",
+      "target": "privacy",
+      "impact": "reduces",
+      "explanation": "Shared vertical circulation increases shared access interactions.",
+      "severity": "info"
+    }
+  ]
+}
