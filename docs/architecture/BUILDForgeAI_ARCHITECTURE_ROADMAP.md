@@ -352,7 +352,16 @@ A strategy represents a conceptual architectural approach, not exact geometry.
   - **3B.4C-3** ✅: Golden behavior & migration equivalence (17-point verification suite passing, golden fixtures created).
   - **3B.4C-4** ✅: Legacy path audit & AST absence guard verification (**178/178 tests passing** across 12 test modules).
 
-- **Stage 3B.5 — Strategy Ranking & Candidate Selection** (**PLANNED**)
+- **Stage 3B.4D — 2D Spatial Realization** (**COMPLETE** ✅)  
+  *See canonical specification: [`06-2d-spatial-realization.md`](file:///c:/Users/affaa/OneDrive/Desktop/BuildForge/docs/architecture/06-2d-spatial-realization.md)*
+  - **3B.4D-1** ✅: Spatial Realization Schema Contract (`SpatialLayoutPlan`, `SpatialRoomSpec`).
+  - **3B.4D-2** ✅: Abstract-to-Spatial Candidate Adapter (`CandidateToLayoutAdapter`).
+  - **3B.4D-3** ✅: Compiler & MILP Solver Bridge (`compile_blueprint` integration).
+  - **3B.4D-4** ✅: Golden 2D Realization Test Fixtures.
+  - **3B.4D-5** ✅: Infeasibility & Failure Handling Engine (`RealizationResult`).
+  - **3B.4D-6** ✅: Full Regression & Migration Verification (**311/311 tests passing** across 17 test modules).
+
+- **Stage 3B.5 — Strategy Ranking & Candidate Selection** (**PLANNED / NEXT** ⏳)
 
 Strategies emerge directly from the design problem and must never be hardcoded around a benchmark or specific building type.
 
@@ -719,9 +728,11 @@ The core design engine does not depend on a particular LLM.
 | Existing compiler/optimizer baseline | 🟢 Stable |
 | Phase 1 — DesignProblem | 🟢 Complete |
 | Phase 2 — Intent Adapter | 🟢 Complete |
-| Stage 3A.1 — Analysis Schema | 🟢 Complete |
-| Stage 3A.2 — ArchitecturalAnalyzer | 🟡 Next |
-| Stage 3B — DesignStrategy | ⚪ Planned |
+| Stage 3A — ArchitecturalAnalysis Schema & Analyzer | 🟢 Complete |
+| Stage 3B.1 – 3B.3 — Generic StrategyGenerator Engine | 🟢 Complete |
+| Stage 3B.4A – 3B.4C — DesignCandidate Schema & CandidateOrganizer | 🟢 Complete |
+| Stage 3B.4D — 2D Spatial Realization | 🟢 Complete |
+| Stage 3B.5 — Strategy Ranking & Selection | ⚪ Planned |
 | Phase 4 — Candidate Design | ⚪ Planned |
 | Phase 5 — Validation | ⚪ Planned |
 | Phase 6 — Optimization/Ranking | ⚪ Planned |
