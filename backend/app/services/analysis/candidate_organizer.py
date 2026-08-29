@@ -259,10 +259,18 @@ def organize_candidate(
             if _matches_trigger(dec, rule):
                 matched_rules.append(rule)
 
-    # Deduplicate matching rules deterministically by rule.id
+    # Define generic action execution precedence (Containerization -> Floor Tiering -> Topology)
+    _ACTION_PRECEDENCE = {
+        OrganizationAction.GROUP_BY_ATTRIBUTE: 10,
+        OrganizationAction.ASSIGN_FLOOR_TIER: 20,
+        OrganizationAction.CREATE_CIRCULATION_NODE: 30,
+        OrganizationAction.CREATE_SERVICE_STACK: 40,
+    }
+
+    # Deduplicate matching rules deterministically by action precedence then rule.id
     unique_rules: list[OrganizationRule] = []
     seen_rule_ids: set[str] = set()
-    for rule in sorted(matched_rules, key=lambda r: r.id):
+    for rule in sorted(matched_rules, key=lambda r: (_ACTION_PRECEDENCE.get(r.action, 99), r.id)):
         if rule.id not in seen_rule_ids:
             seen_rule_ids.add(rule.id)
             unique_rules.append(rule)

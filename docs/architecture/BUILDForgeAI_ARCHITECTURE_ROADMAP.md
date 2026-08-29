@@ -346,7 +346,11 @@ A strategy represents a conceptual architectural approach, not exact geometry.
     - **3B.3C-3** ✅: Golden migration tests — semantic equivalence verified against benchmark.
     - **3B.3C-4** ✅: Legacy Path B removed from `StrategyGenerator`. `RequirementKind` branching removed from generator. AST-based legacy absence regression test added. **85/85 tests passing.**
 
-- **Stage 3B.4 — Strategy Validation & Constraint Engine** (**PLANNED**)
+- **Stage 3B.4C — Generic Candidate Organizer Migration** (**COMPLETE** ✅)
+  - **3B.4C-1** ✅: Audit legacy candidate organization behaviors & classify rules.
+  - **3B.4C-2** ✅: Generic data-driven `CandidateOrganizer` engine implemented (`organize_candidate`, `OrganizationAction`, `OrganizationRule`).
+  - **3B.4C-3** ✅: Golden behavior & migration equivalence (17-point verification suite passing, golden fixtures created).
+  - **3B.4C-4** ✅: Legacy path audit & AST absence guard verification (**178/178 tests passing** across 12 test modules).
 
 - **Stage 3B.5 — Strategy Ranking & Candidate Selection** (**PLANNED**)
 

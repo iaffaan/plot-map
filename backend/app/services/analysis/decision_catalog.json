@@ -109,6 +109,19 @@
         }
       },
       "explanation": "Ground floor strategy assigns all program spaces to floor_1."
+    },
+    {
+      "id": "org-floor-distributed",
+      "trigger_dimension": "floor_allocation",
+      "trigger_value": "distributed",
+      "action": "assign_floor_tier",
+      "target_collection": "floor_organization",
+      "parameters": {
+        "tier_mapping": {
+          "by_unit": "even_distribution"
+        }
+      },
+      "explanation": "Distributed floor allocation distributes units across available site floors."
     }
   ]
 }

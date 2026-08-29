@@ -529,3 +529,42 @@ def test_21_space_with_non_dict_metadata():
     assert "space_1" in enriched.unit_organization["unit_default"]
     assert "space_2" in enriched.unit_organization["unit_default"]
 
+
+def test_22_candidate_organizer_contains_no_legacy_domain_branching():
+    """Verify via AST inspection that candidate_organizer.py contains zero hardcoded domain branches."""
+    import ast
+    from pathlib import Path
+
+    organizer_file = Path(__file__).parent.parent / "app" / "services" / "analysis" / "candidate_organizer.py"
+    assert organizer_file.exists()
+
+    with open(organizer_file, "r", encoding="utf-8") as f:
+        tree = ast.parse(f.read(), filename=str(organizer_file))
+
+    forbidden_strings = {
+        "vertical_circulation",
+        "unit_organization",
+        "service_core_strategy",
+        "floor_allocation",
+        "shared",
+        "independent",
+        "hybrid",
+    }
+
+    class BranchVisitor(ast.NodeVisitor):
+        def __init__(self):
+            self.violations: list[str] = []
+
+        def visit_Compare(self, node: ast.Compare):
+            for child in ast.walk(node):
+                if isinstance(child, ast.Constant) and isinstance(child.value, str):
+                    if child.value in forbidden_strings:
+                        self.violations.append(f"Hardcoded domain string in AST comparison line {node.lineno}: '{child.value}'")
+            self.generic_visit(node)
+
+    visitor = BranchVisitor()
+    visitor.visit(tree)
+
+    assert not visitor.violations, f"Found domain-specific branches in candidate_organizer.py: {visitor.violations}"
+
+
