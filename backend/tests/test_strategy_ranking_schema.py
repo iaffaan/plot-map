@@ -79,10 +79,12 @@ def test_01_minimal_valid_criterion_score():
 
 def test_02_criterion_score_bounds():
     """Point 2: Verify score bounds [0.0, 1.0]."""
+    invalid_low_score: float = -0.1
+    invalid_high_score: float = 1.1
     with pytest.raises(ValidationError):
         CriterionScore(
             criterion_id="c1",
-            score=-0.1,
+            score=invalid_low_score,  # type: ignore[arg-type]
             weight=0.5,
             weighted_score=0.0,
             explanation="Invalid score",
@@ -90,7 +92,7 @@ def test_02_criterion_score_bounds():
     with pytest.raises(ValidationError):
         CriterionScore(
             criterion_id="c1",
-            score=1.1,
+            score=invalid_high_score,  # type: ignore[arg-type]
             weight=0.5,
             weighted_score=0.55,
             explanation="Invalid score",
@@ -99,11 +101,13 @@ def test_02_criterion_score_bounds():
 
 def test_03_criterion_weight_bounds():
     """Point 3: Verify weight bounds [0.0, 1.0]."""
+    invalid_low_weight: float = -0.1
+    invalid_high_weight: float = 1.5
     with pytest.raises(ValidationError):
         CriterionScore(
             criterion_id="c1",
             score=0.5,
-            weight=-0.1,
+            weight=invalid_low_weight,  # type: ignore[arg-type]
             weighted_score=0.0,
             explanation="Invalid weight",
         )
@@ -111,7 +115,7 @@ def test_03_criterion_weight_bounds():
         CriterionScore(
             criterion_id="c1",
             score=0.5,
-            weight=1.5,
+            weight=invalid_high_weight,  # type: ignore[arg-type]
             weighted_score=0.75,
             explanation="Invalid weight",
         )
@@ -145,8 +149,9 @@ def test_06_ranked_candidate_construction():
 
 def test_07_rank_validation():
     """Point 7: Verify rank >= 1 validation."""
+    invalid_rank: int = 0
     with pytest.raises(ValidationError):
-        _make_sample_ranked_candidate(rank=0)
+        _make_sample_ranked_candidate(rank=invalid_rank)  # type: ignore[arg-type]
 
 
 def test_08_selection_status_enum_validation():
@@ -242,11 +247,12 @@ def test_13_selected_candidate_must_exist_in_ranked_candidates():
 def test_14_source_problem_version_validation():
     """Point 14: Verify source_problem_version >= 1 validation."""
     rc1 = _make_sample_ranked_candidate("c1", rank=1)
+    invalid_version: int = 0
     with pytest.raises(ValidationError):
         RankingResult(
             id="rr-1",
             source_problem_id="prob-1",
-            source_problem_version=0,
+            source_problem_version=invalid_version,  # type: ignore[arg-type]
             ranked_candidates=[rc1],
             selected_candidate_ids=["c1"],
             ranking_version="1.0.0",
