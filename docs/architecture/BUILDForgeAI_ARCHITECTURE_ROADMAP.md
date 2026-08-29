@@ -361,7 +361,14 @@ A strategy represents a conceptual architectural approach, not exact geometry.
   - **3B.4D-5** ✅: Infeasibility & Failure Handling Engine (`RealizationResult`).
   - **3B.4D-6** ✅: Full Regression & Migration Verification (**311/311 tests passing** across 17 test modules).
 
-- **Stage 3B.5 — Strategy Ranking & Candidate Selection** (**PLANNED / NEXT** ⏳)
+- **Stage 3B.5 — Strategy Ranking & Candidate Selection** (**PLANNED / NEXT** ⏳)  
+  *See canonical specification: [`07-strategy-ranking-selection.md`](file:///c:/Users/affaa/OneDrive/Desktop/BuildForge/docs/architecture/07-strategy-ranking-selection.md)*
+  - **3B.5-1** ⏳: Strategy Ranking & Selection Schema Contracts (`RankingResult`, `RankedCandidate`).
+  - **3B.5-2** ⏳: Declarative Preference & Scoring Catalog (`preference_catalog.json` & loader).
+  - **3B.5-3** ⏳: Phase 1 Abstract Strategic Scorer (`AbstractStrategicScorer`).
+  - **3B.5-4** ⏳: Phase 2 Spatial Realization Scorer (`SpatialRealizationScorer`).
+  - **3B.5-5** ⏳: Candidate Selector & Deterministic Tie-Breaking Engine (`CandidateSelector`).
+  - **3B.5-6** ⏳: Golden Ranking Test Fixtures & Full Regression Verification.
 
 Strategies emerge directly from the design problem and must never be hardcoded around a benchmark or specific building type.
 
@@ -732,7 +739,7 @@ The core design engine does not depend on a particular LLM.
 | Stage 3B.1 – 3B.3 — Generic StrategyGenerator Engine | 🟢 Complete |
 | Stage 3B.4A – 3B.4C — DesignCandidate Schema & CandidateOrganizer | 🟢 Complete |
 | Stage 3B.4D — 2D Spatial Realization | 🟢 Complete |
-| Stage 3B.5 — Strategy Ranking & Selection | ⚪ Planned |
+| Stage 3B.5 — Strategy Ranking & Selection | 🟡 Planned / Next |
 | Phase 4 — Candidate Design | ⚪ Planned |
 | Phase 5 — Validation | ⚪ Planned |
 | Phase 6 — Optimization/Ranking | ⚪ Planned |
