@@ -1,8 +1,8 @@
 # BuildForgeAI — Architecture & Implementation Roadmap
 
-> **Status:** Active  
-> **Purpose:** Source of truth for implementation stages and architectural boundaries  
-> **Audience:** Human developers and AI coding agents (Copilot, Antigravity, etc.)  
+> **Status:** Active
+> **Purpose:** Source of truth for implementation stages and architectural boundaries
+> **Audience:** Human developers and AI coding agents (Copilot, Antigravity, etc.)
 > **Principle:** Coding agents are replaceable implementation workers. This document owns the architecture.
 
 ---
@@ -330,13 +330,13 @@ A strategy represents a conceptual architectural approach, not exact geometry.
 
 ### Sub-stages & Progress:
 
-- **Stage 3B.1 — DesignStrategy Schema** (**COMPLETE**)  
+- **Stage 3B.1 — DesignStrategy Schema** (**COMPLETE**)
   Introduced non-geometric `DesignStrategy`, `DecisionRecord`, `TradeOff`, `StrategyRisk`, and `FeasibilityExpectation` schemas.
 
-- **Stage 3B.2 — StrategyGenerator Baseline Infrastructure** (**COMPLETE**)  
+- **Stage 3B.2 — StrategyGenerator Baseline Infrastructure** (**COMPLETE**)
   Established baseline deterministic pipeline: requirement traceability, constraint filtering, uncertainty propagation, fingerprint deduplication, deterministic ordering, and strategy limit bounding.
 
-- **Stage 3B.3 — Generic Data-Driven Generation Engine** (**COMPLETE** ✅)  
+- **Stage 3B.3 — Generic Data-Driven Generation Engine** (**COMPLETE** ✅)
   Removed domain-dimension coupling and replaced hardcoded archetypes with a pure data-driven reasoning engine.
   - **Stage 3B.3A** ✅: Analysis Data Contract (`DecisionRecord.alternatives`, `IncompatibilityRule`, `DimensionRelationship`) + tests.
   - **Stage 3B.3B** ✅: Generic Strategy Engine (Bounded Cartesian combination, dynamic filtering, dynamic trade-off derivation) + unseen dimension tests.
@@ -352,7 +352,7 @@ A strategy represents a conceptual architectural approach, not exact geometry.
   - **3B.4C-3** ✅: Golden behavior & migration equivalence (17-point verification suite passing, golden fixtures created).
   - **3B.4C-4** ✅: Legacy path audit & AST absence guard verification (**178/178 tests passing** across 12 test modules).
 
-- **Stage 3B.4D — 2D Spatial Realization** (**COMPLETE** ✅)  
+- **Stage 3B.4D — 2D Spatial Realization** (**COMPLETE** ✅)
   *See canonical specification: [`06-2d-spatial-realization.md`](file:///c:/Users/affaa/OneDrive/Desktop/BuildForge/docs/architecture/06-2d-spatial-realization.md)*
   - **3B.4D-1** ✅: Spatial Realization Schema Contract (`SpatialLayoutPlan`, `SpatialRoomSpec`).
   - **3B.4D-2** ✅: Abstract-to-Spatial Candidate Adapter (`CandidateToLayoutAdapter`).
@@ -361,7 +361,7 @@ A strategy represents a conceptual architectural approach, not exact geometry.
   - **3B.4D-5** ✅: Infeasibility & Failure Handling Engine (`RealizationResult`).
   - **3B.4D-6** ✅: Full Regression & Migration Verification (**311/311 tests passing** across 17 test modules).
 
-- **Stage 3B.5 — Strategy Ranking & Candidate Selection** (**COMPLETE** ✅)  
+- **Stage 3B.5 — Strategy Ranking & Candidate Selection** (**COMPLETE** ✅)
   *See canonical specification: [`07-strategy-ranking-selection.md`](file:///c:/Users/affaa/OneDrive/Desktop/BuildForge/docs/architecture/07-strategy-ranking-selection.md)*
   - **3B.5-1** ✅: Strategy Ranking & Selection Schema Contracts (`RankingResult`, `RankedCandidate`).
   - **3B.5-2** ✅: Declarative Preference & Scoring Catalog (`preference_catalog.json` & loader).
@@ -370,7 +370,14 @@ A strategy represents a conceptual architectural approach, not exact geometry.
   - **3B.5-5** ✅: Candidate Selector & Deterministic Tie-Breaking Engine (`CandidateSelector`).
   - **3B.5-6** ✅: Golden Ranking Test Fixtures & Full Regression Verification (**498/498 tests passing** across 23 test modules).
 
-- **Stage 3B.6 — Downstream Integration & Orchestration** (**PLANNED / NEXT** ⏳)
+- **Stage 3B.6 — Downstream Integration & Orchestration** (**IN PROGRESS** 🟡)
+  *See canonical specification: [`08-downstream-integration-orchestration.md`](file:///c:/Users/affaa/OneDrive/Desktop/BuildForge/docs/architecture/08-downstream-integration-orchestration.md)*
+  - **3B.6-1** ✅: Pipeline Contracts & Schemas (`orchestration.py`).
+  - **3B.6-2** ✅: Candidate Lifecycle Manager (`lifecycle_manager.py`).
+  - **3B.6-3** ✅: Phase 1 Strategic Pre-Filtering & Pruning Orchestrator (`phase1_pruner.py`).
+  - **3B.6-4** ✅: Spatial Realization & Phase 2 Ranking Orchestrator (`spatial_phase2.py`).
+  - **3B.6-5** ✅: End-to-End Orchestrator Service (`DesignOrchestrator`).
+  - **3B.6-6** ⏳: Golden End-to-End Test Fixtures & Regression Verification.
 
 Strategies emerge directly from the design problem and must never be hardcoded around a benchmark or specific building type.
 
