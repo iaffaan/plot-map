@@ -247,6 +247,20 @@ def compile_geometry(
             })
             door_id_counter += 1
 
+    # Place Exterior Main Entrance Door on the Entrance Lobby
+    for name, box in boxes.items():
+        if box.get("type") == "Entrance" or "Entrance" in name:
+            door_pos = [round(box["x"] + box["w"] / 2, 2), round(box["y"], 2)]
+            doors.append({
+                "id": f"door_main_entrance",
+                "position": door_pos,
+                "direction": "horizontal",
+                "width": 3.5,
+                "type": "main_entrance",
+                "rooms": [name]
+            })
+            break
+
     # 4. Generate windows
     windows = []
     window_id_counter = 1
@@ -255,59 +269,64 @@ def compile_geometry(
         if box["is_ots"] or box["is_stair"] or box["type"] == "Entrance":
             continue
             
-        placed_ext = False
+        # Place windows on qualifying exterior boundary walls (enables dual-wall cross-ventilation)
+        placed_edges = set()
         
         # Left boundary touch
-        if abs(box["x"] - env_min_x) < 0.05 and box["h"] >= 4.0:
+        if (abs(box["x"] - env_min_x) <= 0.5 or box["x"] <= env_min_x + 0.5) and box["h"] >= 4.0:
             windows.append({
                 "id": f"window_{window_id_counter}",
                 "position": [round(box["x"], 2), round(box["y"] + box["h"] / 2, 2)],
                 "direction": "vertical",
+                "wall_edge": "left",
                 "width": 3.0 if box["type"] == "Kitchen" else 4.0,
                 "type": "exterior",
                 "room": name
             })
             window_id_counter += 1
-            placed_ext = True
+            placed_edges.add("left")
             
         # Right boundary touch
-        if abs(box["x"] + box["w"] - env_max_x) < 0.05 and box["h"] >= 4.0 and not placed_ext:
+        if (abs(box["x"] + box["w"] - env_max_x) <= 0.5 or box["x"] + box["w"] >= env_max_x - 0.5) and box["h"] >= 4.0 and "right" not in placed_edges:
             windows.append({
                 "id": f"window_{window_id_counter}",
                 "position": [round(box["x"] + box["w"], 2), round(box["y"] + box["h"] / 2, 2)],
                 "direction": "vertical",
+                "wall_edge": "right",
                 "width": 3.0 if box["type"] == "Kitchen" else 4.0,
                 "type": "exterior",
                 "room": name
             })
             window_id_counter += 1
-            placed_ext = True
+            placed_edges.add("right")
             
         # Bottom boundary touch
-        if abs(box["y"] - env_min_y) < 0.05 and box["w"] >= 4.0 and not placed_ext:
+        if (abs(box["y"] - env_min_y) <= 0.5 or box["y"] <= env_min_y + 0.5) and box["w"] >= 4.0 and "bottom" not in placed_edges:
             windows.append({
                 "id": f"window_{window_id_counter}",
                 "position": [round(box["x"] + box["w"] / 2, 2), round(box["y"], 2)],
                 "direction": "horizontal",
+                "wall_edge": "bottom",
                 "width": 3.0 if box["type"] == "Kitchen" else 4.0,
                 "type": "exterior",
                 "room": name
             })
             window_id_counter += 1
-            placed_ext = True
+            placed_edges.add("bottom")
             
         # Top boundary touch
-        if abs(box["y"] + box["h"] - env_max_y) < 0.05 and box["w"] >= 4.0 and not placed_ext:
+        if (abs(box["y"] + box["h"] - env_max_y) <= 0.5 or box["y"] + box["h"] >= env_max_y - 0.5) and box["w"] >= 4.0 and "top" not in placed_edges:
             windows.append({
                 "id": f"window_{window_id_counter}",
                 "position": [round(box["x"] + box["w"] / 2, 2), round(box["y"] + box["h"], 2)],
                 "direction": "horizontal",
+                "wall_edge": "top",
                 "width": 3.0 if box["type"] == "Kitchen" else 4.0,
                 "type": "exterior",
                 "room": name
             })
             window_id_counter += 1
-            placed_ext = True
+            placed_edges.add("top")
 
         # OTS windows
         for other_box in boxes.values():

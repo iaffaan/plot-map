@@ -85,9 +85,14 @@ def calculate_layout_metrics(
     daylight_score = (lit_vent_rooms / total_vent_rooms * 100.0) if total_vent_rooms > 0 else 100.0
     
     # 6. Cross Ventilation Score
-    cross_vent_rooms = 0
+    habitable_types = {"Bedroom", "Living Room", "Kitchen", "Dining Room", "Pooja", "Living"}
+    total_habitable_rooms = 0
+    total_vent_points = 0.0
+
     for floor_idx, f_data in floors_data.items():
         layout = f_data.get('layout', {})
+        if not layout:
+            continue
         geom = f_data.get('geometry', {})
         windows = geom.get('windows', [])
         
@@ -98,16 +103,22 @@ def calculate_layout_metrics(
                 room_windows.setdefault(r_name, []).append(win)
                 
         for r_name, room in layout.items():
-            if room.get('type') in ['Bedroom', 'Living Room', 'Kitchen']:
+            r_type = room.get('type', '')
+            if r_type in habitable_types or any(ht.lower() in r_name.lower() for ht in ["bedroom", "living", "kitchen", "dining", "pooja"]):
+                total_habitable_rooms += 1
                 wins = room_windows.get(r_name, [])
-                if len(wins) >= 1:
-                    cross_vent_rooms += 1
-                if len(wins) >= 2:
-                    # Bonus for multiple openings
-                    cross_vent_rooms += 0.5
-                    
-    # Cap at 100%
-    cross_vent_score = min(100.0, (cross_vent_rooms / max(1, len(floors_data)) * 50.0))
+                distinct_walls = {w.get("wall_edge", w.get("direction", "")) for w in wins}
+                if len(distinct_walls) >= 2 or len(wins) >= 2:
+                    total_vent_points += 1.0  # True dual-wall cross-ventilation
+                elif len(wins) == 1:
+                    total_vent_points += 0.75  # Single-sided exterior ventilation & natural airflow
+                else:
+                    total_vent_points += 0.0  # Unventilated
+
+    if total_habitable_rooms > 0:
+        cross_vent_score = round(min(100.0, (total_vent_points / total_habitable_rooms) * 100.0), 1)
+    else:
+        cross_vent_score = 100.0
     
     # 7. Buildability Score (dynamically calculated from Phase 11 validation engine)
     from app.services.geometry.validation import validate_layout

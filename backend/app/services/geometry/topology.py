@@ -41,24 +41,32 @@ def validate_privacy(G: nx.DiGraph, main_door: str = "Main Door") -> tuple[bool,
     if not targets:
         return True, "Privacy validation passed (no public rooms on this floor)."
         
-    if main_door not in U:
-        # If Main Door is not in the graph, we find the node of type 'Main Door' or 'Entrance'
-        entrances = [n for n, d in U.nodes(data=True) if d.get('type') in ['Entrance', 'Main Door']]
-        if entrances:
-            main_door = entrances[0]
-        else:
-            # Fallback to Staircase node for upper floors
-            staircases = [n for n, d in U.nodes(data=True) if d.get('type') == 'Staircase' or 'stair' in n.lower()]
-            if staircases:
-                main_door = staircases[0]
-            else:
-                return False, "Main Door / Entrance / Staircase node not found in the graph."
-            
     # Identify all private nodes in the graph
     private_nodes = [
         n for n, d in U.nodes(data=True) 
         if d.get('type') in private_types or 'bedroom' in n.lower() or 'bathroom' in n.lower()
     ]
+
+    if main_door not in U:
+        # If Main Door is not in the graph, we find the node of type 'Entrance', 'Main Door', 'Staircase', or 'Circulation'
+        entrances = [n for n, d in U.nodes(data=True) if d.get('type') in ['Entrance', 'Main Door']]
+        if entrances:
+            main_door = entrances[0]
+        else:
+            # Fallback to Staircase, Landing, or Circulation node for upper floors
+            staircases = [
+                n for n, d in U.nodes(data=True) 
+                if d.get('type') in ['Staircase', 'Circulation', 'Landing'] or 'stair' in n.lower() or 'circulation' in n.lower() or 'landing' in n.lower() or 'lobby' in n.lower()
+            ]
+            if staircases:
+                main_door = staircases[0]
+            else:
+                # Fallback to first public hub (e.g., Living Room) if present
+                public_nodes = [n for n in targets if n not in private_nodes]
+                if public_nodes:
+                    main_door = public_nodes[0]
+                else:
+                    return False, "Main Door / Entrance / Staircase node not found in the graph."
     
     for target in targets:
         if target == main_door:

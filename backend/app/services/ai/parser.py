@@ -13,8 +13,8 @@ PARSER_SYSTEM_PROMPT = (
 
 def parse_requirements_fallback(prompt: str) -> CompilerIntent:
     """
-    Fallback parser using regular expressions to extract parameters from unstructured prompts
-    when the Gemini API is unavailable or fails.
+    Enhanced fallback parser using regex and line analysis to extract parameters from structured or unstructured prompts
+    when primary AI provider is unavailable.
     """
     # 1. Parse plot dimensions (e.g., "40x40", "30x40", "43.75x41")
     width, depth = 40.0, 40.0
@@ -23,15 +23,23 @@ def parse_requirements_fallback(prompt: str) -> CompilerIntent:
         width = float(dim_match.group(1))
         depth = float(dim_match.group(2))
         
-    # 2. Parse floor count (e.g., "G+1" -> 2, "G+2" -> 3)
+    # 2. Parse floor count (e.g., "G+1" -> 2, "G+2" -> 3, "Ground Floor... First Floor" -> 2)
     floors = 1
     floor_match = re.search(r'g\+(\d+)', prompt, re.IGNORECASE)
     if floor_match:
         floors = int(floor_match.group(1)) + 1
     else:
-        num_floor_match = re.search(r'(\d+)\s*floor', prompt, re.IGNORECASE)
-        if num_floor_match:
-            floors = int(num_floor_match.group(1))
+        prompt_lower = prompt.lower()
+        if "third floor" in prompt_lower or "3rd floor" in prompt_lower:
+            floors = 4
+        elif "second floor" in prompt_lower or "2nd floor" in prompt_lower:
+            floors = 3
+        elif "first floor" in prompt_lower or "1st floor" in prompt_lower or "ground floor" in prompt_lower and ("floor 1" in prompt_lower or "floor 2" in prompt_lower):
+            floors = 2
+        else:
+            num_floor_match = re.search(r'(\d+)\s*floor', prompt, re.IGNORECASE)
+            if num_floor_match:
+                floors = int(num_floor_match.group(1))
             
     # 3. Parse setback (e.g., "setback of 5.0")
     setback = 5.0
@@ -39,33 +47,91 @@ def parse_requirements_fallback(prompt: str) -> CompilerIntent:
     if setback_match:
         setback = float(setback_match.group(1))
         
-    # 4. Parse rooms based on enum category matches
+    # 4. Parse rooms line-by-line for structured briefs
     rooms = []
-    for cat in RoomCategory:
-        if cat.value in prompt.lower():
-            count = 1
-            # Check for counts (e.g., "2 bedrooms")
-            count_match = re.search(r'(\d+)\s*' + cat.value, prompt, re.IGNORECASE)
-            if count_match:
-                count = int(count_match.group(1))
-            for _ in range(count):
-                rooms.append(RoomIntent(room_type=cat))
-                
-    # Fallback default room list if none matched
-    if not rooms:
-        rooms = [
-            RoomIntent(room_type=RoomCategory.BEDROOM),
-            RoomIntent(room_type=RoomCategory.LIVING),
-            RoomIntent(room_type=RoomCategory.KITCHEN),
-            RoomIntent(room_type=RoomCategory.BATHROOM)
-        ]
+    lines = prompt.splitlines()
+    for line in lines:
+        l_lower = line.strip().lower()
+        if not l_lower or l_lower.startswith("#") or "staircase" in l_lower or "shared stair" in l_lower:
+            continue
         
+        # Check specific room keywords
+        if "living" in l_lower or "hall" in l_lower or "lounge" in l_lower:
+            rooms.append(RoomIntent(room_type=RoomCategory.LIVING))
+        elif "kitchen" in l_lower or "pantry" in l_lower:
+            rooms.append(RoomIntent(room_type=RoomCategory.KITCHEN))
+        elif "master bed" in l_lower or "bedroom" in l_lower or "bed room" in l_lower:
+            rooms.append(RoomIntent(room_type=RoomCategory.BEDROOM))
+        elif "bath" in l_lower or "toilet" in l_lower or "washroom" in l_lower or "wc" in l_lower:
+            rooms.append(RoomIntent(room_type=RoomCategory.BATHROOM))
+        elif "balcony" in l_lower or "terrace" in l_lower:
+            rooms.append(RoomIntent(room_type=RoomCategory.BALCONY))
+        elif "utility" in l_lower or "service" in l_lower or "wash area" in l_lower:
+            rooms.append(RoomIntent(room_type=RoomCategory.UTILITY))
+        elif "pooja" in l_lower or "mandir" in l_lower:
+            rooms.append(RoomIntent(room_type=RoomCategory.POOJA))
+
+    # If line-by-line yielded nothing, fall back to global keyword search
+    if not rooms:
+        for cat in RoomCategory:
+            if cat.value in prompt.lower():
+                count = 1
+                count_match = re.search(r'(\d+)\s*' + cat.value, prompt, re.IGNORECASE)
+                if count_match:
+                    count = int(count_match.group(1))
+                for _ in range(count):
+                    rooms.append(RoomIntent(room_type=cat))
+                
+    # Fallback default room program if still empty
+    if not rooms:
+        if floors == 1:
+            rooms = [
+                RoomIntent(room_type=RoomCategory.BEDROOM),
+                RoomIntent(room_type=RoomCategory.LIVING),
+                RoomIntent(room_type=RoomCategory.KITCHEN),
+                RoomIntent(room_type=RoomCategory.BATHROOM)
+            ]
+        elif floors == 2:
+            rooms = [
+                RoomIntent(room_type=RoomCategory.LIVING),
+                RoomIntent(room_type=RoomCategory.KITCHEN),
+                RoomIntent(room_type=RoomCategory.BEDROOM),
+                RoomIntent(room_type=RoomCategory.BEDROOM),
+                RoomIntent(room_type=RoomCategory.BATHROOM),
+                RoomIntent(room_type=RoomCategory.BATHROOM),
+            ]
+        else:
+            rooms = [
+                RoomIntent(room_type=RoomCategory.LIVING),
+                RoomIntent(room_type=RoomCategory.KITCHEN),
+                RoomIntent(room_type=RoomCategory.BEDROOM),
+                RoomIntent(room_type=RoomCategory.BEDROOM),
+                RoomIntent(room_type=RoomCategory.BEDROOM),
+                RoomIntent(room_type=RoomCategory.BATHROOM),
+                RoomIntent(room_type=RoomCategory.BATHROOM),
+            ]
+        
+    # 5. Parse qualitative objectives (ventilation, daylighting)
+    prompt_lower = prompt.lower()
+    prioritize_vent = any(k in prompt_lower for k in ["ventilat", "cross-vent", "cross vent", "airflow", "airy", "breeze"])
+    prioritize_light = any(k in prompt_lower for k in ["natural light", "daylight", "sunlight", "sunlit", "lighting"])
+    
+    target_objectives = []
+    if prioritize_vent:
+        target_objectives.append("cross_ventilation")
+    if prioritize_light:
+        target_objectives.append("natural_daylight")
+
     return CompilerIntent(
         plot_width=width,
         plot_depth=depth,
         floors=floors,
         front_road_setback=setback,
-        confidence_score=0.5,
+        confidence_score=0.45,
+        fallback_used=True,
+        prioritize_ventilation=prioritize_vent,
+        prioritize_daylight=prioritize_light,
+        target_objectives=target_objectives,
         rooms=rooms
     )
 
@@ -76,30 +142,78 @@ def parse_requirements(
 ) -> CompilerIntent:
     """
     Main requirements extraction handler. Attempts to parse unstructured prompt into
-    a structured CompilerIntent using Gemini and the instructor client.
-    Falls back to regex-based parsing on failure.
+    a structured CompilerIntent using OpenAI-compatible NIM or Gemini client.
+    Falls back gracefully to multi-tier parsing.
     """
+    from app.core.config import settings
+
     if client is not None:
-        try:
-            intent: CompilerIntent = client.create(
-                model="gemini-2.5-flash",
-                response_model=CompilerIntent,
-                max_retries=0,
-                strict=False,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": PARSER_SYSTEM_PROMPT
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ]
-            )
-            intent.confidence_score = 0.95
-            return intent
-        except Exception as e:  # noqa: BLE001
+        last_exception = None
+        max_attempts = 1
+        backoff_delay = 1.0
+
+        model_name = settings.NVIDIA_MODEL if hasattr(settings, "NVIDIA_MODEL") and settings.NVIDIA_MODEL else "nvidia/nemotron-3.5-lightning-30b-a3b"
+
+        for attempt in range(1, max_attempts + 1):
+            try:
+                raw_res = None
+                if hasattr(client, "create"):
+                    raw_res = client.create(
+                        model=model_name,
+                        response_model=CompilerIntent,
+                        max_retries=0 if ai_state is not None else 1,
+                        strict=False,
+                        messages=[
+                            {
+                                "role": "system",
+                                "content": PARSER_SYSTEM_PROMPT
+                            },
+                            {
+                                "role": "user",
+                                "content": prompt
+                            }
+                        ]
+                    )
+                elif hasattr(client, "chat") and hasattr(client.chat, "completions"):
+                    raw_res = client.chat.completions.create(
+                        model=model_name,
+                        response_model=CompilerIntent,
+                        max_retries=0 if ai_state is not None else 1,
+                        strict=False,
+                        messages=[
+                            {
+                                "role": "system",
+                                "content": PARSER_SYSTEM_PROMPT
+                            },
+                            {
+                                "role": "user",
+                                "content": prompt
+                            }
+                        ]
+                    )
+                else:
+                    raise AttributeError("Unsupported client type")
+
+                if isinstance(raw_res, CompilerIntent):
+                    intent = raw_res
+                elif isinstance(raw_res, str):
+                    intent = CompilerIntent.model_validate_json(raw_res)
+                else:
+                    intent = raw_res
+                intent.confidence_score = 0.95
+                intent.fallback_used = False
+                return intent
+            except Exception as e:  # noqa: BLE001
+                last_exception = e
+                if attempt < max_attempts:
+                    import time
+                    time.sleep(backoff_delay)
+                    backoff_delay *= 2.0
+                else:
+                    break
+
+        if last_exception is not None:
+            e = last_exception
             if ai_state is not None:
                 error_text = str(e).lower()
                 error_type = type(e).__name__.lower()
@@ -123,11 +237,9 @@ def parse_requirements(
                 ai_state["compiler_failed"] = True
                 ai_state["failure_type"] = failure_type
                 ai_state["quota_exhausted"] = failure_type == "quota"
-            print(f"[AI Layer] LLM call failed ({e}). Using local rule-based parser fallback...")
-            
+            print(f"[AI Layer] Primary LLM call failed ({last_exception}). Using rule-based fallback...")
+
     return parse_requirements_fallback(prompt)
-
-
 
 def parse_intent_to_layout(
     description: str,

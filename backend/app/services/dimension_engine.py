@@ -4,34 +4,48 @@ from app.drawing import Drawing, Dimension
 from app.core.cad_kernel.spatial_index import SpatialIndex
 from app.services.geometry_resolver import ResolvedGeometry
 
-def generate_dimensions(building: Building, geom: ResolvedGeometry, drawing: Drawing) -> None:
+def generate_dimensions(building: Building, geom: ResolvedGeometry, drawing: Drawing, floor_id: str | None = None) -> None:
     """
-    Generates CAD dimension lines for the building.
+    Generates CAD dimension lines for a specific floor or the entire building.
     Uses a SpatialIndex candidate pipeline to place dimension lines without overlaps.
     """
     index = SpatialIndex()
     
+    target_wall_ids = set(building.floors[floor_id].wall_ids) if floor_id and floor_id in building.floors else set(building.walls.keys())
+    target_opening_ids = set(building.floors[floor_id].opening_ids) if floor_id and floor_id in building.floors else set(building.openings.keys())
+    target_room_ids = set(building.floors[floor_id].room_ids) if floor_id and floor_id in building.floors else set(building.rooms.keys())
+
     # 1. Insert existing geometry bounds into index to prevent placing dimensions inside walls
-    for w_id, panels in geom.wall_panels.items():
+    for w_id in target_wall_ids:
+        panels = geom.wall_panels.get(w_id, [])
         for p in panels:
             xs = [v[0] for v in p.vertices]
             ys = [v[1] for v in p.vertices]
             if xs and ys:
                 index.insert(w_id, min(xs), min(ys), max(xs), max(ys))
                 
-    for op_id, box in geom.opening_boxes.items():
-        xs = [v[0] for v in box.vertices]
-        ys = [v[1] for v in box.vertices]
-        if xs and ys:
-            index.insert(op_id, min(xs), min(ys), max(xs), max(ys))
+    for op_id in target_opening_ids:
+        box = geom.opening_boxes.get(op_id)
+        if box:
+            xs = [v[0] for v in box.vertices]
+            ys = [v[1] for v in box.vertices]
+            if xs and ys:
+                index.insert(op_id, min(xs), min(ys), max(xs), max(ys))
             
-    # Calculate building bounding box
+    # Calculate floor building bounding box
     all_xs: List[float] = []
     all_ys: List[float] = []
-    for w_id, panels in geom.wall_panels.items():
+    for w_id in target_wall_ids:
+        panels = geom.wall_panels.get(w_id, [])
         for p in panels:
             all_xs.extend([v[0] for v in p.vertices])
             all_ys.extend([v[1] for v in p.vertices])
+            
+    if not all_xs or not all_ys:
+        for w_id, panels in geom.wall_panels.items():
+            for p in panels:
+                all_xs.extend([v[0] for v in p.vertices])
+                all_ys.extend([v[1] for v in p.vertices])
             
     if not all_xs or not all_ys:
         return
@@ -84,8 +98,12 @@ def generate_dimensions(building: Building, geom: ResolvedGeometry, drawing: Dra
     index.insert("dim_overall_v", dim_x - 1.0, min_y, dim_x + 1.0, max_y)
     
     # 4. Room segment boundaries dimensions
-    # For each room, add internal segment dimensions along its borders
-    for r_id, room in building.rooms.items():
+    # For each room on the active floor, add internal segment dimensions along its borders
+    seen_dims = set()
+    for r_id in target_room_ids:
+        room = building.rooms.get(r_id)
+        if not room:
+            continue
         room_poly = geom.room_boundaries.get(r_id)
         if room_poly:
             r_xs = [v[0] for v in room_poly.vertices]
@@ -93,6 +111,11 @@ def generate_dimensions(building: Building, geom: ResolvedGeometry, drawing: Dra
             if r_xs and r_ys:
                 r_min_x, r_max_x = min(r_xs), max(r_xs)
                 r_min_y, r_max_y = min(r_ys), max(r_ys)
+                
+                dim_key = (round(r_min_x, 2), round(r_max_x, 2), round(r_min_y, 2), round(r_max_y, 2))
+                if dim_key in seen_dims:
+                    continue
+                seen_dims.add(dim_key)
                 
                 # Internal horizontal center dimension
                 center_y = (r_min_y + r_max_y) / 2.0

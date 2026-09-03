@@ -36,6 +36,8 @@ def compile_blueprint(payload: dict) -> dict:
         grid_snap = float(payload.get('grid_snap', 0.5))
         time_limit_sec = int(payload.get('time_limit_sec', 5))
         floors = int(payload.get('floors', 1))
+        ventilation_weight = payload.get('ventilation_weight')
+        prioritize_ventilation = bool(payload.get('prioritize_ventilation', False))
         
         # --- 2. Geometric Layer ---
         plot = create_plot(width, depth)
@@ -55,6 +57,7 @@ def compile_blueprint(payload: dict) -> dict:
         floors_data = {}
         plumbing_cores = []
         total_ots_generated = 0
+        previous_floor_footprint = None
         
         for floor_idx in range(1, floors + 1):
             # Filter rooms for current floor
@@ -101,7 +104,10 @@ def compile_blueprint(payload: dict) -> dict:
                 road_edge=road_edge,
                 grid_snap=grid_snap,
                 time_limit_sec=time_limit_sec,
-                plumbing_cores=plumbing_cores
+                plumbing_cores=plumbing_cores,
+                ventilation_weight=ventilation_weight,
+                prioritize_ventilation=prioritize_ventilation,
+                lower_floor_footprint=previous_floor_footprint
             )
             
             if not solver_res.get('success', False):
@@ -111,10 +117,19 @@ def compile_blueprint(payload: dict) -> dict:
                 }
                 
             # Extract bathroom coordinates for plumbing cores alignment on next floors
-            for room in solver_res.get('rooms', {}).values():
+            floor_layout_rooms = solver_res.get('rooms', {})
+            for room in floor_layout_rooms.values():
                 if room['type'] == 'Bathroom':
                     rx, ry, rw, rh = room['x'], room['y'], room['width'], room['height']
                     plumbing_cores.append((rx, ry, rx + rw, ry + rh))
+                    
+            # Record current floor footprint to constrain upper floors
+            if floor_layout_rooms:
+                cf_min_x = min(r['x'] for r in floor_layout_rooms.values())
+                cf_max_x = max(r['x'] + r['width'] for r in floor_layout_rooms.values())
+                cf_min_y = min(r['y'] for r in floor_layout_rooms.values())
+                cf_max_y = max(r['y'] + r['height'] for r in floor_layout_rooms.values())
+                previous_floor_footprint = (cf_min_x, cf_min_y, cf_max_x, cf_max_y)
                     
             # Compile detailed geometry for this floor
             geometry_detail = compile_geometry(

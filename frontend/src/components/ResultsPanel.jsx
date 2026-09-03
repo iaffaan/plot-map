@@ -1,9 +1,11 @@
 import { motion } from 'framer-motion'
-import { Download, Share2, Maximize2 } from 'lucide-react'
+import { Download, Share2, Maximize2, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 export function ResultsPanel({ metrics, projectId, isVisible, explanation }) {
   if (!isVisible || !metrics) return null
+
+  const isDegraded = metrics.fallbackUsed || (metrics.confidenceScore !== undefined && metrics.confidenceScore < 0.8)
 
   const metricGroups = [
     {
@@ -74,6 +76,25 @@ export function ResultsPanel({ metrics, projectId, isVisible, explanation }) {
             </Button>
           </div>
         </div>
+
+        {/* Degraded Fallback Mode Warning Banner */}
+        {isDegraded && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="mt-4 p-3.5 border border-amber-500/40 bg-amber-500/10 rounded-sm space-y-1"
+          >
+            <div className="flex items-center gap-2 text-amber-400 font-mono text-xs font-semibold uppercase tracking-wide">
+              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>Heuristic Fallback Mode (Confidence: {((metrics.confidenceScore || 0.45) * 100).toFixed(0)}%)</span>
+            </div>
+            <p className="text-xs text-amber-200/80 font-mono pl-6 leading-relaxed">
+              {metrics.warnings && metrics.warnings.length > 0
+                ? metrics.warnings[0]
+                : 'AI natural language parsing degraded; rule-based defaults were used for room specifications.'}
+            </p>
+          </motion.div>
+        )}
       </div>
 
       {/* Metrics Grid */}

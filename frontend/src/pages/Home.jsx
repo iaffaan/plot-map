@@ -154,12 +154,13 @@ export default function Home() {
         metadata: data.metadata,
         floors_data: data.floors,
         drawing_svg: data.drawing_svg,
+        drawing_svgs: data.drawing_svgs,
       })
 
 
       // Map real metrics returned by the backend metrics engine
       const metrics = data.metrics || {}
-      const totalArea = data.metadata.buildable_area_sqft * params.floors
+      const totalArea = (data.metadata?.buildable_area_sqft || params.plotWidth * params.plotDepth * 0.7) * (data.floors ? Object.keys(data.floors).length : params.floors)
       const usableArea = totalArea * 0.85
 
       setResults({
@@ -172,6 +173,9 @@ export default function Home() {
         structuralCompliance: metrics.buildability_score || 100.0,
         estimatedCost: metrics.estimated_cost_inr ? `₹${metrics.estimated_cost_inr.toLocaleString('en-IN')}` : `₹0`,
         constructionTime: `${12 + params.floors * 2} months`,
+        confidenceScore: data.confidence_score,
+        fallbackUsed: data.fallback_used,
+        warnings: data.warnings || [],
       })
 
       // Store AI design explanation
@@ -349,6 +353,8 @@ export default function Home() {
               ) : (
                 <CADViewer2D
                   svgString={buildingData?.drawing_svg || ""}
+                  drawingSvgs={buildingData?.drawing_svgs || null}
+                  floorsCount={buildingData?.metadata?.floors_count || 1}
                   isFullscreen={isFullscreen}
                   onToggleFullscreen={toggleFullscreen}
                 />

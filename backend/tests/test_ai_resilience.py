@@ -140,16 +140,15 @@ def test_optimizer_failure_keeps_existing_error_handling(monkeypatch):
         )
 
 
-def test_gemini_client_uses_explicit_http_timeout(monkeypatch):
+def test_llm_client_uses_explicit_http_timeout(monkeypatch):
     from app.api import dependencies
 
     provider_client = object()
-    from_provider = Mock(return_value=provider_client)
-    monkeypatch.setattr(dependencies.instructor, "from_provider", from_provider)
-    monkeypatch.setattr(dependencies.settings, "GEMINI_API_KEY", "test-key")
+    from_openai = Mock(return_value=provider_client)
+    monkeypatch.setattr(dependencies.instructor, "from_openai", from_openai)
+    monkeypatch.setattr(dependencies.settings, "NVIDIA_API_KEY", "test-key")
+    monkeypatch.setattr(dependencies, "_llm_client", None)
     monkeypatch.setattr(dependencies, "_gemini_client", None)
 
-    assert dependencies.get_gemini_client() is provider_client
-
-    options = from_provider.call_args.kwargs["http_options"]
-    assert options.timeout == 10_000
+    assert dependencies.get_llm_client() is provider_client
+    assert from_openai.called

@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     
     # API Keys
+    NVIDIA_API_KEY: str | None = Field(default=None, validation_alias=AliasChoices("NVIDIA_API_KEY", "NVIDIA_NIM_API_KEY"))
     GEMINI_API_KEY: str | None = Field(default=None, validation_alias=AliasChoices("GEMINI_API_KEY", "GOOGLE_API_KEY"))
     
     # Application Config
@@ -17,8 +18,11 @@ class Settings(BaseSettings):
     # Solver Config
     SOLVER_TIMEOUT_SEC: int = 8
 
-    # Gemini HTTP request timeout, in milliseconds
-    GEMINI_TIMEOUT_MS: int = 10_000
+    # LLM Config (NVIDIA NIM / OpenAI-compatible)
+    NVIDIA_BASE_URL: str = "https://integrate.api.nvidia.com/v1"
+    NVIDIA_MODEL: str = "nvidia/nemotron-3.5-lightning-30b-a3b"
+    NVIDIA_TIMEOUT_SEC: float = 60.0
+    GEMINI_TIMEOUT_MS: int = 15_000
 
     model_config = SettingsConfigDict(
         env_file=".env",

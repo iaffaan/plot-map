@@ -14,23 +14,13 @@ def solve_layout(
     road_edge: str = 'bottom',
     grid_snap: float = 0.5,
     time_limit_sec: int = 8,
-    plumbing_cores: list[tuple[float, float, float, float]] | None = None
+    plumbing_cores: list[tuple[float, float, float, float]] | None = None,
+    ventilation_weight: float | None = None,
+    prioritize_ventilation: bool = False,
+    lower_floor_footprint: tuple[float, float, float, float] | None = None
 ) -> dict:
     """
     Solves the room layout packing problem using Mixed-Integer Linear Programming (MILP).
-    
-    Args:
-        plot_width: Width of the plot.
-        plot_depth: Depth of the plot.
-        setbacks: Dict of setbacks {'left', 'right', 'bottom', 'top'}.
-        stair_core_coords: Bounding box of the stair core (min_x, min_y, max_x, max_y).
-        rooms: List of room dictionaries.
-        road_edge: Direction of the road ('bottom', 'top', 'left', 'right').
-        grid_snap: Step size for grid snapping (default: 0.5 ft).
-        time_limit_sec: Max solver runtime in seconds.
-        
-    Returns:
-        Dict containing solver status, objective value, and room coordinates.
     """
     # Scale factor to convert float coordinates to integer variables for grid snapping
     S = 1.0 / grid_snap
@@ -43,6 +33,14 @@ def solve_layout(
     x_env_max = pw_int - round(setbacks.get('right', 0.0) * S)
     y_env_min = round(setbacks.get('bottom', 0.0) * S)
     y_env_max = pd_int - round(setbacks.get('top', 0.0) * S)
+
+    # Hard MILP containment constraint: each upper floor must fit inside the lower floor footprint
+    if lower_floor_footprint is not None:
+        lf_min_x, lf_min_y, lf_max_x, lf_max_y = lower_floor_footprint
+        x_env_min = max(x_env_min, round(lf_min_x * S))
+        x_env_max = min(x_env_max, round(lf_max_x * S))
+        y_env_min = max(y_env_min, round(lf_min_y * S))
+        y_env_max = min(y_env_max, round(lf_max_y * S))
     
     sc_x_min, sc_y_min, sc_x_max, sc_y_max = stair_core_coords
     sc_x_min_int = round(sc_x_min * S)
@@ -142,6 +140,13 @@ def solve_layout(
             intercept = 2 * A_int / wk
             prob += h_vars[name] >= intercept - slope * w_vars[name], f"area_tangent_{name}_{k}"
             
+        # Upper bound on room dimensions to prevent small service rooms from expanding uncontrollably
+        preferred_area = room.get('preferred_area', min_area * 1.5)
+        max_area = room.get('max_area', max(min_area * 2.8, preferred_area * 2.0))
+        max_dim = max(min_w_int * 2, int(math.sqrt(max_area * ar_max) * S))
+        prob += w_vars[name] <= min(x_env_max - x_env_min, max_dim), f"max_w_{name}"
+        prob += h_vars[name] <= min(y_env_max - y_env_min, max_dim), f"max_h_{name}"
+
         # Adjacency to road (if applicable)
         if room.get('adjacent_to_road', False):
             if road_edge == 'bottom':
@@ -287,7 +292,8 @@ def solve_layout(
         vent_rewards.append(b_left + b_right + b_top + b_bottom)
         
     if vent_rewards:
-        obj += 10 * sum(vent_rewards)
+        vw = ventilation_weight if ventilation_weight is not None else (25.0 if prioritize_ventilation else 10.0)
+        obj += vw * sum(vent_rewards)
         
     # 3. Compact Circulation: Keep Kitchen near Living Room
     kitchen_name = next((r['name'] for r in rooms if r['type'] == 'Kitchen'), None)
@@ -341,6 +347,25 @@ def solve_layout(
                 
                 # Subtract from objective to reward overlap/proximity
                 obj -= 5.0 * (dx + dy)
+
+    # 7. Envelope Outer Wall Alignment: Strongly reward upper floor rooms aligning with the building envelope perimeter
+    if lower_floor_footprint:
+        env_align_rewards = []
+        for name in room_names:
+            b_lf_left = pulp.LpVariable(f"b_lf_left_{name.replace(' ', '_')}", cat=pulp.LpBinary)
+            b_lf_right = pulp.LpVariable(f"b_lf_right_{name.replace(' ', '_')}", cat=pulp.LpBinary)
+            b_lf_top = pulp.LpVariable(f"b_lf_top_{name.replace(' ', '_')}", cat=pulp.LpBinary)
+            b_lf_bottom = pulp.LpVariable(f"b_lf_bottom_{name.replace(' ', '_')}", cat=pulp.LpBinary)
+            
+            prob += x_vars[name] <= x_env_min + M * (1 - b_lf_left)
+            prob += x_prime_vars[name] >= x_env_max - M * (1 - b_lf_right)
+            prob += y_vars[name] <= y_env_min + M * (1 - b_lf_bottom)
+            prob += y_prime_vars[name] >= y_env_max - M * (1 - b_lf_top)
+            
+            env_align_rewards.append(b_lf_left + b_lf_right + b_lf_top + b_lf_bottom)
+            
+        if env_align_rewards:
+            obj += 30.0 * sum(env_align_rewards)
 
     # Register objective function
     prob += obj, "Maximize_Aesthetic_Layout"

@@ -16,6 +16,7 @@ from app.core.logging import setup_logging
 # Set up global logging config
 setup_logging()
 
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,

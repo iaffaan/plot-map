@@ -89,23 +89,65 @@ def explain_layout(
                 f"Floor Layouts:\n" + "\n".join(floor_summary)
             )
             
-            explanation: DesignExplanation = client.create(
-                model="gemini-2.5-flash",
-                response_model=DesignExplanation,
-                max_retries=2,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": EXPLAINER_SYSTEM_PROMPT
-                    },
-                    {
-                        "role": "user",
-                        "content": f"Analyze this compiled layout and explain the design:\n\n{input_summary}"
-                    }
-                ]
-            )
-            return explanation
+            model_name = "nvidia/nemotron-3.5-lightning-30b-a3b"
+            from app.core.config import settings
+            if hasattr(settings, "NVIDIA_MODEL") and settings.NVIDIA_MODEL:
+                model_name = settings.NVIDIA_MODEL
+
+            raw_exp = None
+            if hasattr(client, "create"):
+                raw_exp = client.create(
+                    model=model_name,
+                    response_model=DesignExplanation,
+                    max_retries=1,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": EXPLAINER_SYSTEM_PROMPT
+                        },
+                        {
+                            "role": "user",
+                            "content": f"Analyze this compiled layout and explain the design:\n\n{input_summary}"
+                        }
+                    ]
+                )
+            elif hasattr(client, "chat") and hasattr(client.chat, "completions"):
+                raw_exp = client.chat.completions.create(
+                    model=model_name,
+                    response_model=DesignExplanation,
+                    max_retries=1,
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": EXPLAINER_SYSTEM_PROMPT
+                        },
+                        {
+                            "role": "user",
+                            "content": f"Analyze this compiled layout and explain the design:\n\n{input_summary}"
+                        }
+                    ]
+                )
+            elif hasattr(client, "models") and hasattr(client.models, "generate_content"):
+                from google.genai import types
+                response = client.models.generate_content(
+                    model="gemini-3.6-flash",
+                    contents=f"{EXPLAINER_SYSTEM_PROMPT}\n\nAnalyze this compiled layout and explain the design:\n\n{input_summary}",
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        response_schema=DesignExplanation,
+                    )
+                )
+                raw_exp = response.text
+            else:
+                raise AttributeError("Unsupported client type: client does not support OpenAI chat.completions or create")
+
+            if isinstance(raw_exp, DesignExplanation):
+                return raw_exp
+            elif isinstance(raw_exp, str):
+                return DesignExplanation.model_validate_json(raw_exp)
+            else:
+                return raw_exp
         except Exception as e:  # noqa: BLE001
-            print(f"[AI Explainer] Gemini call failed ({e}). Falling back to rule-based explainer...")
+            print(f"[AI Explainer] LLM call failed ({e}). Falling back to rule-based explainer...")
             
     return explain_layout_fallback(prompt, layout_data)

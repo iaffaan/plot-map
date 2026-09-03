@@ -78,13 +78,16 @@ def generate_layout_program(intent: CompilerIntent, setbacks: dict) -> dict[str,
         adjacencies.append((entrance_name, living_name))
         
     # Map other rooms from intent.rooms
+    living_idx = 1
     bedroom_idx = 1
     bathroom_idx = 1
     kitchen_idx = 1
+    balcony_idx = 1
+    utility_idx = 1
     other_idx = 1
     
-    # Track the main public area for connecting other rooms
-    hub_name = living_name
+    # Track the main public area for each floor
+    floor_hubs = {1: living_name}
     
     for r in intent.rooms:
         area = float(r.min_area_sqft or 100.0)
@@ -96,23 +99,37 @@ def generate_layout_program(intent: CompilerIntent, setbacks: dict) -> dict[str,
             area = min(area, net_buildable_area * 0.22)
             
         if r.room_type == RoomCategory.LIVING:
+            name = f"Living Room {living_idx}" if living_idx > 1 else "Living Room"
+            f_ass = min(intent.floors, living_idx)
+            floor_hubs[f_ass] = name
             rooms_config.append({
-                "name": living_name,
+                "name": name,
                 "type": "Living Room",
                 "min_area": area,
-                "preferred_area": area * 1.5,
+                "preferred_area": area * 1.4,
                 "priority": 1,
                 "aspect_ratio_range": (1.0, 1.6),
-                "floor_assignment": 1,
+                "floor_assignment": f_ass,
                 "min_width": max(8.0, min(10.0, buildable_width * 0.3)),
                 "min_height": max(8.0, min(10.0, buildable_depth * 0.3)),
                 "requires_ventilation": True,
-                "adjacent_to_road": True
+                "adjacent_to_road": f_ass == 1
             })
-            adjacencies.append((entrance_name, living_name))
+            if f_ass == 1 and name != entrance_name:
+                adjacencies.append((entrance_name, name))
+            living_idx += 1
         elif r.room_type == RoomCategory.BEDROOM:
             name = f"Bedroom {bedroom_idx}" if bedroom_idx > 1 else "Master Bedroom"
-            floor_ass = 2 if bedroom_idx in (1, 2) and intent.floors >= 2 else (3 if bedroom_idx == 3 and intent.floors >= 3 else 1)
+            is_multifamily = len([rm for rm in intent.rooms if rm.room_type == RoomCategory.LIVING]) >= 2
+            if intent.floors == 1:
+                floor_ass = 1
+            elif is_multifamily:
+                # Distribute bedrooms across all available floors for multi-family
+                floor_ass = ((bedroom_idx - 1) % intent.floors) + 1
+            else:
+                # Single-family villa: upper floors (2, 3) get bedrooms, ground floor has living/kitchen
+                floor_ass = ((bedroom_idx - 1) % (intent.floors - 1)) + 2
+                
             rooms_config.append({
                 "name": name,
                 "type": "Bedroom",
@@ -126,10 +143,10 @@ def generate_layout_program(intent: CompilerIntent, setbacks: dict) -> dict[str,
                 "requires_ventilation": True,
                 "adjacent_to_road": False
             })
-            adjacencies.append((hub_name, name))
             bedroom_idx += 1
         elif r.room_type == RoomCategory.KITCHEN:
-            name = "Kitchen"
+            name = f"Kitchen {kitchen_idx}" if kitchen_idx > 1 else "Kitchen"
+            f_ass = min(intent.floors, kitchen_idx)
             rooms_config.append({
                 "name": name,
                 "type": "Kitchen",
@@ -137,22 +154,26 @@ def generate_layout_program(intent: CompilerIntent, setbacks: dict) -> dict[str,
                 "preferred_area": area * 1.3,
                 "priority": 2,
                 "aspect_ratio_range": (1.0, 1.5),
-                "floor_assignment": 1,
+                "floor_assignment": f_ass,
                 "min_width": 6.5 if area >= 42.0 else 5.0,
                 "min_height": 6.5 if area >= 42.0 else 5.0,
                 "requires_ventilation": True,
                 "adjacent_to_road": False
             })
-            adjacencies.append((hub_name, name))
             kitchen_idx += 1
         elif r.room_type == RoomCategory.BATHROOM:
             name = f"Bathroom {bathroom_idx}" if bathroom_idx > 1 else "Bathroom"
-            floor_ass = 2 if bathroom_idx in (1, 2) and intent.floors >= 2 else (3 if bathroom_idx == 3 and intent.floors >= 3 else 1)
+            if intent.floors == 1:
+                floor_ass = 1
+            else:
+                floor_ass = ((bathroom_idx - 1) % intent.floors) + 1
+                
             rooms_config.append({
                 "name": name,
                 "type": "Bathroom",
                 "min_area": area,
-                "preferred_area": area * 1.2,
+                "preferred_area": min(area * 1.2, 50.0),
+                "max_area": 60.0,
                 "priority": 3,
                 "aspect_ratio_range": (1.0, 1.4),
                 "floor_assignment": floor_ass,
@@ -161,26 +182,58 @@ def generate_layout_program(intent: CompilerIntent, setbacks: dict) -> dict[str,
                 "requires_ventilation": False,
                 "adjacent_to_road": False
             })
-            adjacencies.append((hub_name, name))
             bathroom_idx += 1
-        else:
-            name = f"{r.room_type.value.capitalize()} {other_idx}"
-            floor_ass = 2 if other_idx % 2 == 0 and intent.floors >= 2 else 1
+        elif r.room_type == RoomCategory.BALCONY:
+            balcony_idx += 1
+            name = f"Balcony {balcony_idx}" if balcony_idx > 1 else "Balcony"
+            floor_ass = ((balcony_idx - 1) % max(1, intent.floors - 1)) + 2 if intent.floors >= 2 else 1
             rooms_config.append({
                 "name": name,
-                "type": r.room_type.value,
+                "type": "Balcony",
                 "min_area": area,
                 "preferred_area": area * 1.2,
                 "priority": 3,
-                "aspect_ratio_range": (1.0, 1.5),
+                "aspect_ratio_range": (1.0, 2.0),
                 "floor_assignment": floor_ass,
-                "min_width": 5.0,
-                "min_height": 5.0,
-                "requires_ventilation": False,
+                "min_width": 4.0,
+                "min_height": 6.0,
+                "requires_ventilation": True,
+                "adjacent_to_road": True
+            })
+
+    # If the intent had no explicit bedrooms or upper floor rooms, populate standard rooms per floor
+    existing_floors = {r.get("floor_assignment", 1) for r in rooms_config}
+    for fl_num in range(1, intent.floors + 1):
+        if fl_num not in existing_floors:
+            b_name = f"Bedroom {fl_num}" if fl_num > 1 else "Master Bedroom"
+            b_area = min(180.0, max(80.0, net_buildable_area * 0.2))
+            b_w = max(7.0, min(9.0, buildable_width * 0.25))
+            b_h = max(7.0, min(9.0, buildable_depth * 0.25))
+            rooms_config.append({
+                "name": b_name,
+                "type": "Bedroom",
+                "min_area": b_area,
+                "preferred_area": b_area * 1.3,
+                "priority": 2,
+                "aspect_ratio_range": (1.0, 1.5),
+                "floor_assignment": fl_num,
+                "min_width": b_w,
+                "min_height": b_h,
+                "requires_ventilation": True,
                 "adjacent_to_road": False
             })
-            adjacencies.append((hub_name, name))
-            other_idx += 1
+
+    # Connect all rooms on each floor to that floor's main hub
+    for rm in rooms_config:
+        f = rm.get("floor_assignment", 1)
+        r_name = rm["name"]
+        hub = floor_hubs.get(f)
+        if not hub:
+            # First room on this floor becomes the hub
+            floor_hubs[f] = r_name
+            hub = r_name
+        if r_name != hub and (hub, r_name) not in adjacencies and (r_name, hub) not in adjacencies:
+            adjacencies.append((hub, r_name))
 
     # 4. Safety check: scale down rooms if total exceeds 40% of net buildable area
     total_requested_area = sum(r["min_area"] for r in rooms_config)

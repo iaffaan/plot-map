@@ -146,6 +146,15 @@ class SpatialCompilerBridge:
 
         grid_snap = float(plan.realization_parameters.get("grid_snap", 0.5))
         time_limit_sec = int(plan.realization_parameters.get("time_limit_sec", 5))
+        
+        prioritize_ventilation = False
+        if problem and problem.objectives:
+            prioritize_ventilation = any(
+                "ventilat" in o.metric.lower() or "ventilat" in o.id.lower()
+                for o in problem.objectives
+            )
+        if not prioritize_ventilation and "prioritize_ventilation" in plan.realization_parameters:
+            prioritize_ventilation = bool(plan.realization_parameters["prioritize_ventilation"])
 
         return {
             "plot": plot_cfg,
@@ -156,6 +165,7 @@ class SpatialCompilerBridge:
             "floors": plan.floors,
             "grid_snap": grid_snap,
             "time_limit_sec": time_limit_sec,
+            "prioritize_ventilation": prioritize_ventilation,
         }
 
     @classmethod

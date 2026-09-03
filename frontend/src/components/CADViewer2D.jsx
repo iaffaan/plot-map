@@ -4,7 +4,8 @@ import {
 } from 'lucide-react'
 import { Button } from './ui/button'
 
-export function CADViewer2D({ svgString, isFullscreen, onToggleFullscreen }) {
+export function CADViewer2D({ svgString, drawingSvgs, floorsCount = 1, isFullscreen, onToggleFullscreen }) {
+  const [selectedFloor, setSelectedFloor] = useState('1')
   const [transform, setTransform] = useState({ scale: 1, x: 0, y: 0 })
   const [activeLayers, setActiveLayers] = useState({
     walls: true,
@@ -23,12 +24,18 @@ export function CADViewer2D({ svgString, isFullscreen, onToggleFullscreen }) {
   const isDragging = useRef(false)
   const dragStart = useRef({ x: 0, y: 0 })
 
-  // Reset view on new SVG load
+  const currentSvg = (drawingSvgs && drawingSvgs[selectedFloor]) 
+    ? drawingSvgs[selectedFloor] 
+    : (drawingSvgs && drawingSvgs['1']) 
+      ? drawingSvgs['1'] 
+      : svgString || ''
+
+  // Reset view on new SVG load or floor change
   useEffect(() => {
     setTransform({ scale: 1, x: 0, y: 0 })
     setMeasurePoints([])
     setMeasurement(null)
-  }, [svgString])
+  }, [currentSvg, selectedFloor])
 
   // Mouse Wheel Zoom
   const handleWheel = (e) => {
@@ -116,12 +123,12 @@ export function CADViewer2D({ svgString, isFullscreen, onToggleFullscreen }) {
 
   // Download SVG
   const downloadSVG = () => {
-    if (!svgString) return
-    const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' })
+    if (!currentSvg) return
+    const blob = new Blob([currentSvg], { type: 'image/svg+xml;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `blueprint-layout.svg`
+    link.download = `blueprint-floor-${selectedFloor}.svg`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -134,14 +141,14 @@ export function CADViewer2D({ svgString, isFullscreen, onToggleFullscreen }) {
     printWindow.document.write(`
       <html>
         <head>
-          <title>Blueprint Print Sheet</title>
+          <title>Blueprint Print Sheet - Floor ${selectedFloor}</title>
           <style>
             body { margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; }
             svg { width: 100%; height: 100%; max-width: 100%; max-height: 100%; }
           </style>
         </head>
         <body>
-          ${svgString}
+          ${currentSvg}
           <script>
             window.onload = function() { window.print(); window.close(); }
           </script>
@@ -153,10 +160,10 @@ export function CADViewer2D({ svgString, isFullscreen, onToggleFullscreen }) {
 
   // Modifies the SVG string dynamically by inserting visibility styles for layers
   const getProcessedSvgHtml = () => {
-    if (!svgString) return ''
+    if (!currentSvg) return ''
     
     // Inject display styles based on layer visibility
-    let processed = svgString
+    let processed = currentSvg
     Object.entries(activeLayers).forEach(([layer, visible]) => {
       const displayVal = visible ? 'block' : 'none'
       // Replace style for the layers groups
@@ -171,7 +178,7 @@ export function CADViewer2D({ svgString, isFullscreen, onToggleFullscreen }) {
     <div className="flex flex-col w-full h-full bg-[#161722] border border-border relative overflow-hidden select-none">
       
       {/* Top Toolbar */}
-      <div className="flex items-center justify-between p-3 border-b border-border bg-[#0d0e15] z-10">
+      <div className="flex items-center justify-between p-3 border-b border-border bg-[#0d0e15] z-10 flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" className="h-8 px-2" onClick={zoomIn} title="Zoom In">
             <ZoomIn className="w-4 h-4" />
@@ -216,6 +223,38 @@ export function CADViewer2D({ svgString, isFullscreen, onToggleFullscreen }) {
           </Button>
         </div>
       </div>
+
+      {/* Floor Selection Tabs */}
+      {drawingSvgs && Object.keys(drawingSvgs).length > 1 && (
+        <div className="flex items-center gap-1.5 px-3 py-2 bg-[#10111a] border-b border-border text-xs font-mono overflow-x-auto">
+          <span className="text-muted-foreground mr-2 font-semibold tracking-wider uppercase text-[10px]">Select Floor:</span>
+          {Object.keys(drawingSvgs).filter(k => k !== 'all').sort((a,b) => Number(a)-Number(b)).map((fl) => (
+            <button
+              key={fl}
+              onClick={() => setSelectedFloor(fl)}
+              className={`px-3 py-1 rounded text-xs transition-colors cursor-pointer ${
+                selectedFloor === fl 
+                  ? 'bg-blue-600 text-white font-semibold shadow-sm' 
+                  : 'bg-[#1e202e] text-muted-foreground hover:bg-[#282b3d] hover:text-foreground'
+              }`}
+            >
+              Floor {fl}
+            </button>
+          ))}
+          {drawingSvgs['all'] && (
+            <button
+              onClick={() => setSelectedFloor('all')}
+              className={`px-3 py-1 rounded text-xs transition-colors cursor-pointer ${
+                selectedFloor === 'all' 
+                  ? 'bg-blue-600 text-white font-semibold shadow-sm' 
+                  : 'bg-[#1e202e] text-muted-foreground hover:bg-[#282b3d] hover:text-foreground'
+              }`}
+            >
+              All Floors (Stacked)
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Main Canvas Area */}
       <div 
